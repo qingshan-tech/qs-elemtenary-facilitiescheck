@@ -1,0 +1,6 @@
+{
+  "name": "新北市青山國中小 班級桌椅型號清點與需求調查系統",
+  "description": "供新北市青山國中小(小學部)各班導師清點桌椅型號數量、協調多餘桌椅搬運、統計缺額與狀態，並可串接 Google Sheet 後台。",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
