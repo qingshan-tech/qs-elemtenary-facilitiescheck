@@ -1,263 +1,256 @@
-import React, { useState } from 'react';
-import { 
-  X, 
-  Plus, 
-  Trash2, 
-  CheckCircle2, 
-  Info, 
-  Save, 
-  Layers, 
-  AlertCircle
+import React, { useState, useEffect } from 'react';
+import { Classroom, DeskEntry, ChairEntry } from '../types';
+import { DESK_SPECS, CHAIR_SPECS, calculateInventoryStatus } from '../data/initialData';
+import {
+  X,
+  Plus,
+  Trash2,
+  HelpCircle,
+  Save,
+  Users,
+  CheckCircle2,
+  AlertCircle,
+  Info
 } from 'lucide-react';
-import { ClassRoom, DeskModel, ChairModel, ModelCount, InventoryStatus } from '../types';
-import { DESK_SPECS, CHAIR_SPECS } from '../data/deskChart';
 
-interface ReportModalProps {
-  classRoom: ClassRoom;
-  onSave: (updatedClass: ClassRoom) => void;
+interface Props {
+  classroom: Classroom | null;
+  isOpen: boolean;
   onClose: () => void;
-  onOpenDeskSpec: () => void;
+  onSave: (updatedClassroom: Classroom) => void;
+  onOpenSpecs: () => void;
 }
 
-export const ReportModal: React.FC<ReportModalProps> = ({
-  classRoom,
-  onSave,
+export const ReportModal: React.FC<Props> = ({
+  classroom,
+  isOpen,
   onClose,
-  onOpenDeskSpec,
+  onSave,
+  onOpenSpecs
 }) => {
-  const [studentsCount, setStudentsCount] = useState<number>(classRoom.studentsCount);
-  const [teacher, setTeacher] = useState<string>(classRoom.teacher);
-  const [desks, setDesks] = useState<ModelCount<DeskModel>[]>(
-    classRoom.desks.length > 0
-      ? [...classRoom.desks]
-      : [{ model: classRoom.recommendedDeskModel || '#130', quantity: classRoom.studentsCount || 0 }]
-  );
-  const [chairs, setChairs] = useState<ModelCount<ChairModel>[]>(
-    classRoom.chairs.length > 0
-      ? [...classRoom.chairs]
-      : [{ model: classRoom.recommendedChairModel || '#125-#135', quantity: classRoom.studentsCount || 0 }]
-  );
-  const [notes, setNotes] = useState<string>(classRoom.notes || '');
-  const [status, setStatus] = useState<InventoryStatus>(
-    classRoom.status === '未填報' ? '已填報待處理' : classRoom.status
-  );
+  if (!isOpen || !classroom) return null;
 
-  // Calculations
-  const totalDesks = desks.reduce((sum, d) => sum + (Number(d.quantity) || 0), 0);
-  const totalChairs = chairs.reduce((sum, c) => sum + (Number(c.quantity) || 0), 0);
-  const deskDiff = totalDesks - studentsCount;
-  const chairDiff = totalChairs - studentsCount;
+  const [studentCount, setStudentCount] = useState<number>(classroom.studentCount);
+  const [deskEntries, setDeskEntries] = useState<DeskEntry[]>([]);
+  const [chairEntries, setChairEntries] = useState<ChairEntry[]>([]);
+  const [note, setNote] = useState<string>('');
 
+  useEffect(() => {
+    if (classroom) {
+      setStudentCount(classroom.studentCount);
+      // Clone existing or start with one clean default row
+      setDeskEntries(
+        classroom.deskEntries.length > 0
+          ? classroom.deskEntries.map(d => ({ ...d }))
+          : [{ model: '#125', quantity: classroom.studentCount || 0 }]
+      );
+      setChairEntries(
+        classroom.chairEntries.length > 0
+          ? classroom.chairEntries.map(c => ({ ...c }))
+          : [{ model: '#125-#135', quantity: classroom.studentCount || 0 }]
+      );
+      setNote(classroom.note || '');
+    }
+  }, [classroom]);
+
+  // Live total desk & chair calculations
+  const totalDesks = deskEntries.reduce((sum, d) => sum + (Number(d.quantity) || 0), 0);
+  const totalChairs = chairEntries.reduce((sum, c) => sum + (Number(c.quantity) || 0), 0);
+
+  const deskDiff = totalDesks - studentCount;
+  const chairDiff = totalChairs - studentCount;
+
+  // Add desk entry
   const handleAddDeskRow = () => {
-    setDesks([...desks, { model: '#130', quantity: 1 }]);
+    setDeskEntries([...deskEntries, { model: '#130', quantity: 1 }]);
   };
 
   const handleRemoveDeskRow = (index: number) => {
-    setDesks(desks.filter((_, i) => i !== index));
+    setDeskEntries(deskEntries.filter((_, i) => i !== index));
   };
 
-  const handleDeskChange = (index: number, field: 'model' | 'quantity', value: any) => {
-    const updated = [...desks];
+  const handleDeskChange = (index: number, field: keyof DeskEntry, value: any) => {
+    const updated = [...deskEntries];
     if (field === 'quantity') {
       updated[index].quantity = Math.max(0, parseInt(value, 10) || 0);
     } else {
-      updated[index].model = value as DeskModel;
+      updated[index].model = value;
     }
-    setDesks(updated);
+    setDeskEntries(updated);
   };
 
+  // Add chair entry
   const handleAddChairRow = () => {
-    setChairs([...chairs, { model: '#125-#135', quantity: 1 }]);
+    setChairEntries([...chairEntries, { model: '#125-#135', quantity: 1 }]);
   };
 
   const handleRemoveChairRow = (index: number) => {
-    setChairs(chairs.filter((_, i) => i !== index));
+    setChairEntries(chairEntries.filter((_, i) => i !== index));
   };
 
-  const handleChairChange = (index: number, field: 'model' | 'quantity', value: any) => {
-    const updated = [...chairs];
+  const handleChairChange = (index: number, field: keyof ChairEntry, value: any) => {
+    const updated = [...chairEntries];
     if (field === 'quantity') {
       updated[index].quantity = Math.max(0, parseInt(value, 10) || 0);
     } else {
-      updated[index].model = value as ChairModel;
+      updated[index].model = value;
     }
-    setChairs(updated);
+    setChairEntries(updated);
   };
 
+  // Handle Save
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    const now = new Date();
-    const formattedDate = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(
-      now.getDate()
-    ).padStart(2, '0')} ${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
 
-    onSave({
-      ...classRoom,
-      teacher,
-      studentsCount,
-      desks: desks.filter((d) => d.quantity > 0),
-      chairs: chairs.filter((c) => c.quantity > 0),
-      notes,
-      status,
-      updatedAt: formattedDate,
+    const nowStr = new Date().toLocaleString('zh-TW', {
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: false
     });
+
+    const updated: Classroom = {
+      ...classroom,
+      studentCount,
+      deskEntries: deskEntries.filter(d => d.quantity > 0),
+      chairEntries: chairEntries.filter(c => c.quantity > 0),
+      reported: true,
+      note,
+      lastUpdated: nowStr
+    };
+
+    onSave(updated);
+    onClose();
   };
 
   return (
-    <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto">
-      <div className="bg-white rounded-3xl max-w-2xl w-full shadow-2xl border border-slate-200 overflow-hidden my-8 animate-in fade-in zoom-in-95 duration-150">
-        {/* Modal Header */}
-        <div className="bg-slate-900 text-white p-5 flex items-center justify-between border-b border-slate-800">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-blue-600 flex items-center justify-center font-bold text-lg">
-              {classRoom.floor}F
+    <div className="fixed inset-[#000000] z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs overflow-y-auto animate-fade-in">
+      <div className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full max-h-[90vh] flex flex-col border border-slate-200 overflow-hidden">
+        
+        {/* Header */}
+        <div className="p-5 bg-gradient-to-r from-indigo-900 to-slate-900 text-white flex justify-between items-center shrink-0">
+          <div>
+            <div className="flex items-center gap-2">
+              <span className="px-2 py-0.5 bg-indigo-500 text-white font-mono text-xs font-bold rounded">
+                {classroom.floor}
+              </span>
+              <h2 className="text-xl font-bold">{classroom.name} 桌椅清點填報</h2>
             </div>
-            <div>
-              <div className="flex items-center gap-2">
-                <h2 className="text-xl font-bold">{classRoom.name}</h2>
-                <span className="text-xs bg-slate-800 text-slate-300 px-2 py-0.5 rounded-md border border-slate-700">
-                  {classRoom.floor} 樓
-                </span>
-              </div>
-              <p className="text-xs text-slate-400">班級桌椅型號清點與需求回報</p>
-            </div>
+            <p className="text-xs text-indigo-200 mt-1">
+              導師：{classroom.teacher} 老師｜分機：{classroom.extension}
+            </p>
           </div>
-
-          <div className="flex items-center gap-2">
-            <button
-              type="button"
-              onClick={onOpenDeskSpec}
-              className="inline-flex items-center gap-1 text-xs bg-slate-800 hover:bg-slate-700 text-sky-300 px-2.5 py-1.5 rounded-lg border border-slate-700 transition"
-            >
-              <Info className="w-3.5 h-3.5" />
-              型號對照圖
-            </button>
-            <button
-              onClick={onClose}
-              className="p-1.5 text-slate-400 hover:text-white rounded-lg hover:bg-slate-800 transition"
-            >
-              <X className="w-5 h-5" />
-            </button>
-          </div>
+          <button
+            onClick={onClose}
+            className="p-2 text-slate-300 hover:text-white hover:bg-white/10 rounded-full transition-colors"
+          >
+            <X className="w-5 h-5" />
+          </button>
         </div>
 
-        {/* Form Content */}
-        <form onSubmit={handleSubmit} className="p-6 space-y-6 max-h-[80vh] overflow-y-auto">
-          {/* Basic Info */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 bg-slate-50 p-4 rounded-2xl border border-slate-200/80">
+        {/* Modal Form Content */}
+        <form onSubmit={handleSubmit} className="p-6 overflow-y-auto space-y-6 text-slate-800">
+          
+          {/* Student Count Box */}
+          <div className="p-4 bg-indigo-50/60 border border-indigo-100 rounded-xl flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
             <div>
-              <label className="block text-xs font-semibold text-slate-700 mb-1">導師姓名</label>
+              <label className="block text-xs font-bold text-indigo-900 uppercase tracking-wider mb-0.5">
+                現有班級學生人數 (桌椅基準需求數)
+              </label>
+              <p className="text-xs text-indigo-700">請確認班級人數，系統將根據此數值比對桌椅增減</p>
+            </div>
+            <div className="flex items-center gap-2">
+              <Users className="w-4 h-4 text-indigo-600" />
               <input
-                type="text"
-                value={teacher}
-                onChange={(e) => setTeacher(e.target.value)}
-                required
-                className="w-full text-sm bg-white border border-slate-300 rounded-xl px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:outline-none"
+                type="number"
+                min={0}
+                max={60}
+                value={studentCount}
+                onChange={e => setStudentCount(Math.max(0, parseInt(e.target.value, 10) || 0))}
+                className="w-20 px-3 py-1.5 bg-white border border-indigo-300 rounded-lg text-center font-bold font-mono text-base text-indigo-950 focus:ring-2 focus:ring-indigo-500 focus:outline-hidden"
               />
-            </div>
-
-            <div>
-              <label className="block text-xs font-semibold text-slate-700 mb-1">
-                班級應備桌椅數量 (桌椅需求組數)
-              </label>
-              <div className="flex items-center gap-2">
-                <input
-                  type="number"
-                  min="0"
-                  max="100"
-                  value={studentsCount}
-                  onChange={(e) => setStudentsCount(parseInt(e.target.value, 10) || 0)}
-                  placeholder="0"
-                  className="w-full text-sm bg-white border border-slate-300 rounded-xl px-3 py-2 font-bold text-slate-900 focus:ring-2 focus:ring-blue-500 focus:outline-none"
-                />
-                <span className="text-sm font-semibold text-slate-600 shrink-0">組</span>
-              </div>
+              <span className="text-xs font-bold text-indigo-900">人</span>
             </div>
           </div>
 
-          {/* Realtime Live Calculation Summary */}
-          <div className="bg-blue-50/60 border border-blue-200/80 rounded-2xl p-4 grid grid-cols-2 gap-4">
-            <div>
-              <div className="text-xs text-blue-900 font-semibold mb-1">桌子試算結果</div>
-              <div className="text-sm font-bold flex items-center gap-2">
-                <span>現有 {totalDesks} 張 / 應備 {studentsCount} 張</span>
-              </div>
-              <div className="mt-1">
-                {deskDiff === 0 && <span className="text-xs font-bold text-emerald-700 bg-emerald-100 px-2 py-0.5 rounded">[桌子數量正確]</span>}
-                {deskDiff < 0 && <span className="text-xs font-bold text-rose-700 bg-rose-100 px-2 py-0.5 rounded">[需要桌子 {Math.abs(deskDiff)} 張]</span>}
-                {deskDiff > 0 && <span className="text-xs font-bold text-amber-800 bg-amber-100 px-2 py-0.5 rounded">[有多桌子 {deskDiff} 張]</span>}
-              </div>
-            </div>
-
-            <div>
-              <div className="text-xs text-blue-900 font-semibold mb-1">椅子試算結果</div>
-              <div className="text-sm font-bold flex items-center gap-2">
-                <span>現有 {totalChairs} 張 / 應備 {studentsCount} 張</span>
-              </div>
-              <div className="mt-1">
-                {chairDiff === 0 && <span className="text-xs font-bold text-emerald-700 bg-emerald-100 px-2 py-0.5 rounded">[椅子數量正確]</span>}
-                {chairDiff < 0 && <span className="text-xs font-bold text-rose-700 bg-rose-100 px-2 py-0.5 rounded">[需要椅子 {Math.abs(chairDiff)} 張]</span>}
-                {chairDiff > 0 && <span className="text-xs font-bold text-amber-800 bg-amber-100 px-2 py-0.5 rounded">[有多椅子 {chairDiff} 張]</span>}
-              </div>
-            </div>
+          {/* Quick Specs Link Button Banner */}
+          <div className="flex items-center justify-between p-3 bg-slate-50 border border-slate-200 rounded-xl">
+            <span className="text-xs text-slate-600 font-medium">
+              如果不確定桌腳型號或顏色代表的意思：
+            </span>
+            <button
+              type="button"
+              onClick={onOpenSpecs}
+              className="text-xs text-indigo-600 hover:text-indigo-800 font-bold underline flex items-center gap-1 cursor-pointer"
+            >
+              <HelpCircle className="w-3.5 h-3.5" />
+              開啓型號對照圖表
+            </button>
           </div>
 
-          {/* Section 1: Desk Inventory Section */}
+          {/* Desk Reporting Section */}
           <div className="space-y-3">
-            <div className="flex items-center justify-between">
-              <label className="text-sm font-bold text-slate-900 flex items-center gap-2">
-                <span className="w-3 h-3 rounded-full bg-blue-600"></span>
-                清點桌子型號與數量 (共 {DESK_SPECS.length} 種型號)
-              </label>
+            <div className="flex justify-between items-center border-b border-slate-200 pb-2">
+              <div className="flex items-center gap-2">
+                <span className="text-base">🪑</span>
+                <h3 className="font-bold text-slate-900 text-sm">桌子型號與數量清點</h3>
+              </div>
               <button
                 type="button"
                 onClick={handleAddDeskRow}
-                className="text-xs text-blue-600 hover:text-blue-800 font-medium inline-flex items-center gap-1 bg-blue-50 px-2.5 py-1 rounded-lg border border-blue-200"
+                className="px-2.5 py-1 bg-indigo-50 text-indigo-700 hover:bg-indigo-100 rounded-lg text-xs font-bold transition-colors flex items-center gap-1 border border-indigo-200"
               >
                 <Plus className="w-3.5 h-3.5" />
-                新增其他桌子型號
+                新增型號
               </button>
             </div>
 
             <div className="space-y-2">
-              {desks.map((d, index) => {
-                const spec = DESK_SPECS.find((s) => s.model === d.model);
-                return (
-                  <div
-                    key={index}
-                    className="flex items-center gap-3 bg-slate-50 p-3 rounded-xl border border-slate-200"
-                  >
-                    <div className="flex-1">
-                      <select
-                        value={d.model}
-                        onChange={(e) => handleDeskChange(index, 'model', e.target.value)}
-                        className="w-full text-sm bg-white border border-slate-300 rounded-xl px-3 py-1.5 font-medium focus:ring-2 focus:ring-blue-500 focus:outline-none"
-                      >
-                        {DESK_SPECS.map((s) => (
-                          <option key={s.model} value={s.model}>
-                            {s.model} - {s.colorName} ({s.heightRange}cm) {s.discontinued ? '[已停產]' : ''}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
+              {deskEntries.map((entry, idx) => {
+                const spec = DESK_SPECS.find(s => s.model === entry.model);
 
-                    <div className="flex items-center gap-1.5 w-32 shrink-0">
+                return (
+                  <div key={idx} className="flex items-center gap-2 bg-slate-50 p-2.5 rounded-xl border border-slate-200">
+                    {/* Color Swatch Dot */}
+                    <div
+                      className="w-4 h-4 rounded-full border border-slate-400 shrink-0 ml-1"
+                      style={{ backgroundColor: spec?.hexColor || '#CBD5E1' }}
+                    />
+
+                    {/* Desk Dropdown */}
+                    <select
+                      value={entry.model}
+                      onChange={e => handleDeskChange(idx, 'model', e.target.value)}
+                      className="flex-1 px-3 py-1.5 bg-white border border-slate-300 rounded-lg text-xs font-medium font-mono text-slate-900 focus:ring-2 focus:ring-indigo-500 focus:outline-hidden"
+                    >
+                      {DESK_SPECS.map(s => (
+                        <option key={s.model} value={s.model}>
+                          {s.model} ({s.colorName}柱 / 適高{s.heightRange}cm{s.isDiscontinued ? ' - 已停產' : ''})
+                        </option>
+                      ))}
+                    </select>
+
+                    {/* Quantity Input */}
+                    <div className="flex items-center gap-1 shrink-0">
+                      <span className="text-xs text-slate-500 font-medium">數量:</span>
                       <input
                         type="number"
-                        min="0"
-                        max="100"
-                        value={d.quantity}
-                        onChange={(e) => handleDeskChange(index, 'quantity', e.target.value)}
-                        className="w-full text-sm bg-white border border-slate-300 rounded-xl px-3 py-1.5 font-bold text-center focus:ring-2 focus:ring-blue-500 focus:outline-none"
+                        min={0}
+                        max={100}
+                        value={entry.quantity}
+                        onChange={e => handleDeskChange(idx, 'quantity', e.target.value)}
+                        className="w-16 px-2 py-1.5 bg-white border border-slate-300 rounded-lg text-center font-bold font-mono text-xs text-slate-900 focus:ring-2 focus:ring-indigo-500 focus:outline-hidden"
                       />
-                      <span className="text-xs text-slate-600 font-medium shrink-0">張</span>
+                      <span className="text-xs text-slate-600 font-medium">張</span>
                     </div>
 
-                    {desks.length > 1 && (
+                    {/* Delete Row Button */}
+                    {deskEntries.length > 1 && (
                       <button
                         type="button"
-                        onClick={() => handleRemoveDeskRow(index)}
-                        className="p-1.5 text-slate-400 hover:text-rose-600 rounded-lg hover:bg-rose-50 transition shrink-0"
+                        onClick={() => handleRemoveDeskRow(idx)}
+                        className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors"
                       >
                         <Trash2 className="w-4 h-4" />
                       </button>
@@ -268,60 +261,59 @@ export const ReportModal: React.FC<ReportModalProps> = ({
             </div>
           </div>
 
-          {/* Section 2: Chair Inventory Section */}
+          {/* Chair Reporting Section */}
           <div className="space-y-3">
-            <div className="flex items-center justify-between">
-              <label className="text-sm font-bold text-slate-900 flex items-center gap-2">
-                <span className="w-3 h-3 rounded-full bg-amber-600"></span>
-                清點椅子型號與數量 (共 {CHAIR_SPECS.length} 種組合級距)
-              </label>
+            <div className="flex justify-between items-center border-b border-slate-200 pb-2">
+              <div className="flex items-center gap-2">
+                <span className="text-base">💺</span>
+                <h3 className="font-bold text-slate-900 text-sm">椅子型號與數量清點</h3>
+              </div>
               <button
                 type="button"
                 onClick={handleAddChairRow}
-                className="text-xs text-amber-700 hover:text-amber-900 font-medium inline-flex items-center gap-1 bg-amber-50 px-2.5 py-1 rounded-lg border border-amber-200"
+                className="px-2.5 py-1 bg-indigo-50 text-indigo-700 hover:bg-indigo-100 rounded-lg text-xs font-bold transition-colors flex items-center gap-1 border border-indigo-200"
               >
                 <Plus className="w-3.5 h-3.5" />
-                新增其他椅子型號
+                新增型號
               </button>
             </div>
 
             <div className="space-y-2">
-              {chairs.map((c, index) => (
-                <div
-                  key={index}
-                  className="flex items-center gap-3 bg-slate-50 p-3 rounded-xl border border-slate-200"
-                >
-                  <div className="flex-1">
-                    <select
-                      value={c.model}
-                      onChange={(e) => handleChairChange(index, 'model', e.target.value)}
-                      className="w-full text-sm bg-white border border-slate-300 rounded-xl px-3 py-1.5 font-medium focus:ring-2 focus:ring-blue-500 focus:outline-none"
-                    >
-                      {CHAIR_SPECS.map((s) => (
-                        <option key={s.model} value={s.model}>
-                          椅子 {s.model} ({s.gradeLabel})
-                        </option>
-                      ))}
-                    </select>
-                  </div>
+              {chairEntries.map((entry, idx) => (
+                <div key={idx} className="flex items-center gap-2 bg-slate-50 p-2.5 rounded-xl border border-slate-200">
+                  {/* Chair Dropdown */}
+                  <select
+                    value={entry.model}
+                    onChange={e => handleChairChange(idx, 'model', e.target.value)}
+                    className="flex-1 px-3 py-1.5 bg-white border border-slate-300 rounded-lg text-xs font-medium font-mono text-slate-900 focus:ring-2 focus:ring-indigo-500 focus:outline-hidden"
+                  >
+                    {CHAIR_SPECS.map(s => (
+                      <option key={s.model} value={s.model}>
+                        {s.model} (適用：{s.gradeRange} / {s.heightRange}cm)
+                      </option>
+                    ))}
+                  </select>
 
-                  <div className="flex items-center gap-1.5 w-32 shrink-0">
+                  {/* Quantity Input */}
+                  <div className="flex items-center gap-1 shrink-0">
+                    <span className="text-xs text-slate-500 font-medium">數量:</span>
                     <input
                       type="number"
-                      min="0"
-                      max="100"
-                      value={c.quantity}
-                      onChange={(e) => handleChairChange(index, 'quantity', e.target.value)}
-                      className="w-full text-sm bg-white border border-slate-300 rounded-xl px-3 py-1.5 font-bold text-center focus:ring-2 focus:ring-blue-500 focus:outline-none"
+                      min={0}
+                      max={100}
+                      value={entry.quantity}
+                      onChange={e => handleChairChange(idx, 'quantity', e.target.value)}
+                      className="w-16 px-2 py-1.5 bg-white border border-slate-300 rounded-lg text-center font-bold font-mono text-xs text-slate-900 focus:ring-2 focus:ring-indigo-500 focus:outline-hidden"
                     />
-                    <span className="text-xs text-slate-600 font-medium shrink-0">張</span>
+                    <span className="text-xs text-slate-600 font-medium">張</span>
                   </div>
 
-                  {chairs.length > 1 && (
+                  {/* Delete Row Button */}
+                  {chairEntries.length > 1 && (
                     <button
                       type="button"
-                      onClick={() => handleRemoveChairRow(index)}
-                      className="p-1.5 text-slate-400 hover:text-rose-600 rounded-lg hover:bg-rose-50 transition shrink-0"
+                      onClick={() => handleRemoveChairRow(idx)}
+                      className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors"
                     >
                       <Trash2 className="w-4 h-4" />
                     </button>
@@ -331,57 +323,69 @@ export const ReportModal: React.FC<ReportModalProps> = ({
             </div>
           </div>
 
-          {/* Notes Input */}
+          {/* Live Dynamic Calculation Box */}
+          <div className="p-4 bg-slate-900 text-white rounded-xl space-y-2 text-xs">
+            <div className="font-bold text-indigo-300 text-xs tracking-wider uppercase flex items-center gap-1">
+              <Info className="w-3.5 h-3.5 text-indigo-400" />
+              即時比對試算結果
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
+              <div className="flex justify-between items-center p-2 bg-slate-800 rounded-lg">
+                <span>桌子總數: <strong>{totalDesks} 張</strong></span>
+                {deskDiff === 0 ? (
+                  <span className="text-emerald-400 font-bold">✓ 數量正確</span>
+                ) : deskDiff < 0 ? (
+                  <span className="text-rose-400 font-bold">缺 {Math.abs(deskDiff)} 張</span>
+                ) : (
+                  <span className="text-blue-400 font-bold">多 {deskDiff} 張</span>
+                )}
+              </div>
+
+              <div className="flex justify-between items-center p-2 bg-slate-800 rounded-lg">
+                <span>椅子總數: <strong>{totalChairs} 張</strong></span>
+                {chairDiff === 0 ? (
+                  <span className="text-emerald-400 font-bold">✓ 數量正確</span>
+                ) : chairDiff < 0 ? (
+                  <span className="text-rose-400 font-bold">缺 {Math.abs(chairDiff)} 張</span>
+                ) : (
+                  <span className="text-blue-400 font-bold">多 {chairDiff} 張</span>
+                )}
+              </div>
+            </div>
+          </div>
+
+          {/* Teacher Note Textarea */}
           <div>
-            <label className="block text-xs font-semibold text-slate-700 mb-1">
-              備註與特別說明 (例：前門多1張舊桌子/桌面損壞1張/可提供同樓層支援)
+            <label className="block text-xs font-bold text-slate-700 mb-1">
+              班級導師備註說明 (可寫多餘桌椅放置位置或損壞需修繕狀況)
             </label>
             <textarea
               rows={2}
-              value={notes}
-              onChange={(e) => setNotes(e.target.value)}
-              placeholder="請輸入特殊狀況說明..."
-              className="w-full text-sm bg-slate-50 border border-slate-300 rounded-xl p-3 focus:bg-white focus:ring-2 focus:ring-blue-500 focus:outline-none"
+              value={note}
+              onChange={e => setNote(e.target.value)}
+              placeholder="例如：多餘2張#125桌子放置於後方推門外側，可隨時自取。"
+              className="w-full px-3 py-2 bg-white border border-slate-300 rounded-xl text-xs text-slate-800 focus:ring-2 focus:ring-indigo-500 focus:outline-hidden"
             />
           </div>
 
-          {/* Completion Status Selection */}
-          <div className="bg-slate-100 p-4 rounded-2xl border border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-            <div>
-              <div className="text-xs font-bold text-slate-800">標記清點狀態</div>
-              <div className="text-xs text-slate-500">若清點完畢並確認數字無誤，可將狀態切換為已完成</div>
-            </div>
-
-            <div className="flex items-center gap-2">
-              <select
-                value={status}
-                onChange={(e) => setStatus(e.target.value as InventoryStatus)}
-                className="text-sm font-bold bg-white border border-slate-300 rounded-xl px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:outline-none"
-              >
-                <option value="已填報待處理">已填報待處理</option>
-                <option value="搬運協調中">搬運協調中</option>
-                <option value="已完成">已完成 [標記完成]</option>
-              </select>
-            </div>
-          </div>
-
-          {/* Action Buttons */}
-          <div className="flex items-center justify-end gap-3 pt-2 border-t border-slate-100">
+          {/* Modal Footer Buttons */}
+          <div className="pt-2 flex justify-end gap-3 shrink-0">
             <button
               type="button"
               onClick={onClose}
-              className="px-4 py-2 text-sm font-medium text-slate-600 hover:text-slate-800 hover:bg-slate-100 rounded-xl transition"
+              className="px-4 py-2 border border-slate-300 text-slate-700 rounded-xl text-xs font-medium hover:bg-slate-100 transition-colors"
             >
               取消
             </button>
             <button
               type="submit"
-              className="inline-flex items-center gap-2 px-6 py-2.5 bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white font-bold text-sm rounded-xl shadow-md shadow-blue-500/20 transition"
+              className="px-5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold transition-colors shadow-sm flex items-center gap-1.5"
             >
               <Save className="w-4 h-4" />
-              儲存並更新至前/後台
+              <span>確認並儲存填報數據</span>
             </button>
           </div>
+
         </form>
       </div>
     </div>

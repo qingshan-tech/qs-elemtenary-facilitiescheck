@@ -1,76 +1,64 @@
-export type DeskModel = 
-  | '#110' | '#115' | '#120' | '#125' 
-  | '#130' | '#135' | '#140' | '#145' 
-  | '#150' | '#155' | '#160' | '#165' 
-  | '#170' | '#175' | '#180';
-
-export type ChairModel = 
-  | '#110-#120' 
-  | '#125-#135' 
-  | '#140-#150' 
-  | '#155-#165' 
-  | '#170-#180';
-
-export interface DeskSpec {
-  model: DeskModel;
-  colorName: string;
-  colorHex: string;
-  chairModel: ChairModel;
-  heightRange: string;
-  extendRange: string;
-  gradeLabel: string;
-  discontinued?: boolean;
+export interface DeskModelSpec {
+  model: string;         // e.g. "#110"
+  colorName: string;     // e.g. "乳黃"
+  hexColor: string;      // e.g. "#FDF0A6"
+  textColor: string;     // e.g. "#000000" or "#FFFFFF"
+  heightRange: string;   // e.g. "106 ~ 113"
+  extRange: string;      // e.g. "103 ~ 118"
+  gradeRange: string;    // e.g. "國小低"
+  isDiscontinued?: boolean; // 已停產
 }
 
-export interface ChairSpec {
-  model: ChairModel;
-  colorHex: string;
-  heightRange: string;
-  gradeLabel: string;
+export interface ChairModelSpec {
+  model: string;         // e.g. "#110-#120"
+  heightRange: string;   // e.g. "106 ~ 123"
+  gradeRange: string;    // e.g. "國小低"
 }
 
-export type InventoryStatus = '未填報' | '已填報待處理' | '搬運協調中' | '已完成';
-
-export interface ModelCount<T extends string> {
-  model: T;
+export interface DeskEntry {
+  model: string;
   quantity: number;
 }
 
-export interface ClassRoom {
-  id: string;            // e.g. "101", "302", "spec_1"
-  name: string;          // e.g. "1年1班", "3年2班"
-  grade: number;         // 1-6 or 0 for special
-  floor: number;         // 1 to 5
-  teacher: string;       // e.g. "張美玲 老師"
-  studentsCount: number; // e.g. 25
-  desks: ModelCount<DeskModel>[];
-  chairs: ModelCount<ChairModel>[];
-  status: InventoryStatus;
-  updatedAt?: string;
-  notes?: string;
-  recommendedDeskModel: DeskModel;   // Recommended desk model for this grade
-  recommendedChairModel: ChairModel; // Recommended chair model for this grade
+export interface ChairEntry {
+  model: string;
+  quantity: number;
 }
 
-export interface TransferMatch {
+export interface Classroom {
+  id: string;            // e.g. "101"
+  name: string;          // e.g. "101導師"
+  titleExtra?: string;   // e.g. "(學年主任)"
+  teacher: string;       // e.g. "馬欣吟"
+  floor: string;         // e.g. "1F"
+  extension: string;     // e.g. "812"
+  studentCount: number;  // 班級人數 (現有學生需求數)
+  deskEntries: DeskEntry[];
+  chairEntries: ChairEntry[];
+  reported: boolean;     // 是否已填報
+  isCompleted: boolean;  // 總務處/班級標記搬運補齊已完成
+  note?: string;         // 備註說明
+  lastUpdated?: string;
+}
+
+export interface TransferLog {
   id: string;
   fromClassId: string;
   fromClassName: string;
-  fromFloor: number;
   toClassId: string;
   toClassName: string;
-  toFloor: number;
-  itemType: 'desk' | 'chair';
+  type: 'desk' | 'chair';
   model: string;
   quantity: number;
-  isSameFloor: boolean;
-  status: '待調撥' | '搬運中' | '已完成';
+  status: 'pending' | 'completed';
+  timestamp: string;
 }
 
-export interface GoogleSheetConfig {
-  webAppUrl: string;
-  spreadsheetId: string;
-  sheetName: string;
-  autoSync: boolean;
-  lastSyncedAt?: string;
+export interface InventoryStatus {
+  totalDesks: number;
+  totalChairs: number;
+  deskDifference: number; // current - needed (positive = surplus, negative = shortage)
+  chairDifference: number; // current - needed (positive = surplus, negative = shortage)
+  deskTag: string; // e.g., "桌子數量正確", "需要桌子 2 張", "有多桌子 3 張"
+  chairTag: string; // e.g., "椅子數量正確", "需要椅子 1 張", "有多椅子 2 張"
 }

@@ -1,243 +1,263 @@
 import React from 'react';
-import { 
-  User, 
-  Users, 
-  CheckCircle2, 
-  Clock, 
-  Edit3, 
-  Sparkles,
-  Info,
-  Layers
+import { Classroom } from '../types';
+import { calculateInventoryStatus, DESK_SPECS } from '../data/initialData';
+import {
+  Edit3,
+  CheckCircle2,
+  AlertCircle,
+  PhoneCall,
+  User,
+  Users,
+  CheckSquare,
+  Square,
+  ArrowRightLeft,
+  Sparkles
 } from 'lucide-react';
-import { ClassRoom } from '../types';
-import { getClassInventorySummary, getDeskColorHex } from '../utils/inventory';
-import { DESK_SPECS } from '../data/deskChart';
 
-interface ClassCardProps {
-  classRoom: ClassRoom;
-  onEditReport: (classRoom: ClassRoom) => void;
-  onOpenDeskSpec: () => void;
-  isSameFloorHighlighted?: boolean;
+interface Props {
+  classroom: Classroom;
+  onOpenReport: (classroom: Classroom) => void;
+  onToggleCompleted: (classId: string) => void;
+  onOpenCoordinate?: (classroom: Classroom) => void;
 }
 
-export const ClassCard: React.FC<ClassCardProps> = ({
-  classRoom,
-  onEditReport,
-  onOpenDeskSpec,
-  isSameFloorHighlighted = false,
+export const ClassCard: React.FC<Props> = ({
+  classroom,
+  onOpenReport,
+  onToggleCompleted,
+  onOpenCoordinate
 }) => {
-  const summary = getClassInventorySummary(classRoom);
+  const status = calculateInventoryStatus(classroom);
 
-  // Status Badge Colors & Text (High Density Style)
-  const getStatusBadge = () => {
-    switch (classRoom.status) {
-      case '已完成':
-        return (
-          <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded bg-emerald-100 text-emerald-800 border border-emerald-200 uppercase tracking-tight">
-            <CheckCircle2 className="w-3 h-3 text-emerald-600" />
-            已完成
-          </span>
-        );
-      case '已填報待處理':
-        return (
-          <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded bg-blue-100 text-blue-800 border border-blue-200 uppercase tracking-tight">
-            <Clock className="w-3 h-3 text-blue-600" />
-            待處理
-          </span>
-        );
-      case '搬運協調中':
-        return (
-          <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded bg-amber-100 text-amber-800 border border-amber-200 uppercase tracking-tight">
-            <Sparkles className="w-3 h-3 text-amber-600" />
-            協調中
-          </span>
-        );
-      default:
-        return (
-          <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded bg-slate-100 text-slate-500 border border-slate-200 uppercase tracking-tight">
-            未填報
-          </span>
-        );
-    }
-  };
-
-  // Tag renderer for Desk/Chair shortage or surplus
-  const renderTag = (tag: { text: string; type: 'correct' | 'shortage' | 'surplus' | 'unreported' }) => {
-    switch (tag.type) {
-      case 'shortage':
-        return (
-          <span className="px-2 py-0.5 text-[10px] font-bold rounded bg-rose-100 text-rose-700 border border-rose-200 font-mono">
-            {tag.text}
-          </span>
-        );
-      case 'surplus':
-        return (
-          <span className="px-2 py-0.5 text-[10px] font-bold rounded bg-amber-100 text-amber-800 border border-amber-300 font-mono">
-            {tag.text}
-          </span>
-        );
-      case 'correct':
-        return (
-          <span className="px-2 py-0.5 text-[10px] font-semibold rounded bg-emerald-50 text-emerald-700 border border-emerald-200">
-            {tag.text}
-          </span>
-        );
-      default:
-        return (
-          <span className="px-2 py-0.5 text-[10px] font-semibold rounded bg-slate-100 text-slate-500 border border-slate-200">
-            {tag.text}
-          </span>
-        );
-    }
+  // Helper to find color swatch for desk model
+  const getDeskColor = (model: string) => {
+    const spec = DESK_SPECS.find(s => s.model === model);
+    return spec ? spec.hexColor : '#CBD5E1';
   };
 
   return (
     <div
-      className={`bg-white rounded-lg border transition-all duration-150 flex flex-col justify-between overflow-hidden shadow-xs hover:border-slate-300 ${
-        isSameFloorHighlighted
-          ? 'border-amber-400 ring-2 ring-amber-400/20 bg-amber-50/10'
-          : summary.isComplete
-          ? 'border-slate-200 hover:border-emerald-400'
-          : 'border-slate-200 hover:border-blue-400'
+      className={`bg-white rounded-2xl border transition-all duration-200 shadow-xs hover:shadow-md flex flex-col justify-between overflow-hidden relative ${
+        classroom.isCompleted
+          ? 'border-emerald-300 ring-1 ring-emerald-200/60 bg-emerald-50/20'
+          : classroom.reported
+          ? 'border-slate-200 hover:border-indigo-300'
+          : 'border-amber-200 bg-amber-50/20'
       }`}
     >
-      {/* Card Header */}
-      <div className="p-3 bg-slate-50 border-b border-slate-200">
-        <div className="flex items-start justify-between gap-2">
+      {/* Top Banner & Header */}
+      <div>
+        <div className="p-4 border-b border-slate-100 flex items-start justify-between gap-2 bg-gradient-to-r from-slate-50 to-white">
           <div>
-            <div className="flex items-center gap-1.5">
-              <span className="text-[10px] font-mono font-bold px-1.5 py-0.2 rounded bg-slate-200 text-slate-700 border border-slate-300">
-                {classRoom.floor}F
+            <div className="flex items-center gap-2">
+              <span className="px-2 py-0.5 bg-slate-900 text-white rounded-md font-mono text-xs font-bold">
+                {classroom.floor}
               </span>
-              <h3 className="text-sm font-bold text-slate-900 tracking-tight">
-                {classRoom.name}
+              <h3 className="text-base font-bold text-slate-900 flex items-center gap-1.5">
+                {classroom.name}
+                {classroom.titleExtra && (
+                  <span className="text-xs font-normal text-indigo-600 bg-indigo-50 px-1.5 py-0.5 rounded border border-indigo-100">
+                    {classroom.titleExtra}
+                  </span>
+                )}
               </h3>
             </div>
-            <div className="flex items-center gap-1 text-xs text-slate-500 mt-0.5 font-medium">
-              <User className="w-3 h-3 text-slate-400" />
-              <span>導師：{classRoom.teacher}</span>
+
+            <div className="flex items-center gap-3 text-xs text-slate-500 mt-2">
+              <span className="flex items-center gap-1 text-slate-700 font-medium">
+                <User className="w-3.5 h-3.5 text-slate-400" />
+                {classroom.teacher}
+              </span>
+              <span className="flex items-center gap-1 font-mono text-slate-600">
+                <PhoneCall className="w-3 h-3 text-slate-400" />
+                分機 {classroom.extension}
+              </span>
             </div>
           </div>
-          {getStatusBadge()}
-        </div>
 
-        {/* Required Desk & Chair Demand Summary */}
-        <div className="mt-2.5 flex items-center justify-between text-xs bg-white px-2.5 py-1 rounded border border-slate-200/80">
-          <span className="flex items-center gap-1 text-[11px] font-semibold text-slate-700 font-mono">
-            應備需求：
-            <strong className="text-slate-900 font-bold">
-              {classRoom.studentsCount > 0 ? `${classRoom.studentsCount} 組` : '待確認'}
-            </strong>
-          </span>
-          <span className="text-slate-500 text-[10px] font-mono">
-            (現有 {summary.totalDesks}桌 / {summary.totalChairs}椅)
-          </span>
-        </div>
-      </div>
-
-      {/* Card Body: High Density Inventory Summary Grid */}
-      <div className="p-3 space-y-2.5 flex-1 bg-white">
-        {/* Status Tags */}
-        <div className="flex flex-wrap items-center gap-1.5">
-          {renderTag(summary.deskTag)}
-          {renderTag(summary.chairTag)}
-        </div>
-
-        {/* Desk Section */}
-        <div className="bg-slate-50/70 rounded p-2.5 border border-slate-200/70 space-y-1.5 text-xs">
-          <div className="flex items-center justify-between text-[11px] font-bold text-slate-700 border-b border-slate-200/60 pb-1">
-            <span className="flex items-center gap-1">
-              <span className="w-1.5 h-1.5 rounded-full bg-emerald-600"></span>
-              桌子總數：<strong className="text-slate-900 font-mono text-xs">{summary.totalDesks}</strong> 張
-            </span>
-            <button
-              onClick={onOpenDeskSpec}
-              className="text-[10px] text-emerald-700 hover:text-emerald-900 font-medium underline inline-flex items-center gap-0.5"
-            >
-              <Info className="w-3 h-3" />
-              對照表
-            </button>
+          {/* Student Count Badge */}
+          <div className="bg-slate-100 border border-slate-200 rounded-xl px-2.5 py-1 text-center shrink-0">
+            <div className="flex items-center gap-1 text-[10px] text-slate-500 font-medium">
+              <Users className="w-3 h-3 text-slate-400" />
+              學生人數
+            </div>
+            <div className="text-sm font-extrabold text-slate-800 font-mono">
+              {classroom.studentCount} 人
+            </div>
           </div>
+        </div>
 
-          {classRoom.desks.length > 0 ? (
-            <div className="flex flex-wrap gap-1">
-              {classRoom.desks.map((d, idx) => {
-                const colorHex = getDeskColorHex(d.model);
-                const spec = DESK_SPECS.find((s) => s.model === d.model);
-                return (
+        {/* Status Tags Section */}
+        <div className="px-4 py-3 bg-slate-50/70 border-b border-slate-100 flex flex-wrap gap-1.5 items-center">
+          
+          {/* Reported Status Tag */}
+          {!classroom.reported ? (
+            <span className="px-2.5 py-1 text-xs font-bold bg-amber-100 text-amber-800 rounded-lg flex items-center gap-1 border border-amber-200">
+              <AlertCircle className="w-3.5 h-3.5 text-amber-600" />
+              尚未填報
+            </span>
+          ) : (
+            <span className="px-2.5 py-1 text-xs font-semibold bg-slate-200 text-slate-700 rounded-lg flex items-center gap-1">
+              <CheckCircle2 className="w-3.5 h-3.5 text-slate-500" />
+              已回報
+            </span>
+          )}
+
+          {/* Completion Tag */}
+          {classroom.isCompleted && (
+            <span className="px-2.5 py-1 text-xs font-bold bg-emerald-600 text-white rounded-lg flex items-center gap-1 shadow-2xs">
+              <CheckCircle2 className="w-3.5 h-3.5" />
+              搬運調配已完成
+            </span>
+          )}
+
+          {/* Desk Requirement Tag */}
+          {classroom.reported && (
+            status.deskDifference === 0 ? (
+              <span className="px-2.5 py-1 text-xs font-medium bg-emerald-100 text-emerald-800 rounded-lg border border-emerald-200">
+                桌子數量正確
+              </span>
+            ) : status.deskDifference < 0 ? (
+              <span className="px-2.5 py-1 text-xs font-bold bg-rose-100 text-rose-800 rounded-lg border border-rose-200 animate-pulse-subtle">
+                {status.deskTag}
+              </span>
+            ) : (
+              <span className="px-2.5 py-1 text-xs font-bold bg-blue-100 text-blue-800 rounded-lg border border-blue-200">
+                {status.deskTag}
+              </span>
+            )
+          )}
+
+          {/* Chair Requirement Tag */}
+          {classroom.reported && (
+            status.chairDifference === 0 ? (
+              <span className="px-2.5 py-1 text-xs font-medium bg-emerald-100 text-emerald-800 rounded-lg border border-emerald-200">
+                椅子數量正確
+              </span>
+            ) : status.chairDifference < 0 ? (
+              <span className="px-2.5 py-1 text-xs font-bold bg-rose-100 text-rose-800 rounded-lg border border-rose-200 animate-pulse-subtle">
+                {status.chairTag}
+              </span>
+            ) : (
+              <span className="px-2.5 py-1 text-xs font-bold bg-blue-100 text-blue-800 rounded-lg border border-blue-200">
+                {status.chairTag}
+              </span>
+            )
+          )}
+
+        </div>
+
+        {/* Detailed Inventory Breakdown */}
+        <div className="p-4 space-y-3 text-xs">
+          
+          {/* Desk inventory */}
+          <div>
+            <div className="text-slate-500 font-semibold mb-1 flex justify-between items-center">
+              <span>🪑 桌子總計：<strong className="text-slate-900 font-mono">{status.totalDesks} 張</strong> (需求 {classroom.studentCount} 張)</span>
+            </div>
+            {classroom.deskEntries.length === 0 ? (
+              <p className="text-slate-400 italic text-[11px]">尚無桌子型號紀錄</p>
+            ) : (
+              <div className="flex flex-wrap gap-1.5 mt-1">
+                {classroom.deskEntries.map((d, i) => (
                   <span
-                    key={idx}
-                    className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[11px] bg-white text-slate-800 border border-slate-200 font-mono"
+                    key={i}
+                    className="inline-flex items-center gap-1.5 px-2 py-1 bg-slate-100 border border-slate-200 rounded-md text-slate-800 font-medium"
                   >
                     <span
-                      className="w-2 h-2 rounded-full border border-slate-300"
-                      style={{ backgroundColor: colorHex }}
-                    ></span>
-                    <span className="font-bold">{d.model}</span>
-                    <span className="text-slate-400 text-[10px]">({spec?.colorName || ''})</span>
-                    <span className="bg-slate-100 text-slate-800 text-[10px] px-1 rounded font-bold">
-                      {d.quantity}
-                    </span>
+                      className="w-2.5 h-2.5 rounded-full border border-slate-400 shrink-0"
+                      style={{ backgroundColor: getDeskColor(d.model) }}
+                    />
+                    <span className="font-mono">{d.model}</span>
+                    <span className="font-bold text-indigo-700">x{d.quantity}</span>
                   </span>
-                );
-              })}
-            </div>
-          ) : (
-            <div className="text-[11px] text-slate-400 italic">尚未清點桌子型號</div>
-          )}
-        </div>
-
-        {/* Chair Section */}
-        <div className="bg-slate-50/70 rounded p-2.5 border border-slate-200/70 space-y-1.5 text-xs">
-          <div className="flex items-center justify-between text-[11px] font-bold text-slate-700 border-b border-slate-200/60 pb-1">
-            <span className="flex items-center gap-1">
-              <span className="w-1.5 h-1.5 rounded-full bg-amber-600"></span>
-              椅子總數：<strong className="text-slate-900 font-mono text-xs">{summary.totalChairs}</strong> 張
-            </span>
+                ))}
+              </div>
+            )}
           </div>
 
-          {classRoom.chairs.length > 0 ? (
-            <div className="flex flex-wrap gap-1">
-              {classRoom.chairs.map((ch, idx) => (
-                <span
-                  key={idx}
-                  className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[11px] bg-white text-slate-800 border border-slate-200 font-mono"
-                >
-                  <span className="font-bold text-amber-900">{ch.model}</span>
-                  <span className="bg-amber-50 text-amber-900 text-[10px] px-1 rounded font-bold border border-amber-200/50">
-                    {ch.quantity}
-                  </span>
-                </span>
-              ))}
+          {/* Chair inventory */}
+          <div>
+            <div className="text-slate-500 font-semibold mb-1 flex justify-between items-center">
+              <span>💺 椅子總計：<strong className="text-slate-900 font-mono">{status.totalChairs} 張</strong> (需求 {classroom.studentCount} 張)</span>
             </div>
-          ) : (
-            <div className="text-[11px] text-slate-400 italic">尚未清點椅子型號</div>
-          )}
-        </div>
-
-        {/* Notes */}
-        {classRoom.notes && (
-          <div className="text-[11px] text-slate-600 bg-amber-50/60 border border-amber-200/60 p-1.5 rounded italic">
-            💬 {classRoom.notes}
+            {classroom.chairEntries.length === 0 ? (
+              <p className="text-slate-400 italic text-[11px]">尚無椅子型號紀錄</p>
+            ) : (
+              <div className="flex flex-wrap gap-1.5 mt-1">
+                {classroom.chairEntries.map((c, i) => (
+                  <span
+                    key={i}
+                    className="inline-flex items-center gap-1 px-2 py-1 bg-slate-100 border border-slate-200 rounded-md text-slate-800 font-medium"
+                  >
+                    <span className="font-mono text-slate-700">{c.model}</span>
+                    <span className="font-bold text-indigo-700">x{c.quantity}</span>
+                  </span>
+                ))}
+              </div>
+            )}
           </div>
-        )}
+
+          {/* Teacher Note */}
+          {classroom.note && (
+            <div className="p-2 bg-slate-50 border border-slate-200 rounded-lg text-slate-600 text-[11px] leading-relaxed">
+              <span className="font-bold text-slate-700">導師備註：</span>{classroom.note}
+            </div>
+          )}
+
+        </div>
       </div>
 
-      {/* Card Footer */}
-      <div className="p-2.5 bg-slate-50 border-t border-slate-200 flex items-center justify-between">
-        <span className="text-[10px] text-slate-400 font-mono">
-          {classRoom.updatedAt ? `更新: ${classRoom.updatedAt}` : '未填報'}
-        </span>
-
+      {/* Card Action Buttons Footer */}
+      <div className="p-3 bg-slate-50 border-t border-slate-100 flex items-center justify-between gap-2 mt-auto">
+        
+        {/* Toggle IsCompleted */}
         <button
-          onClick={() => onEditReport(classRoom)}
-          className="inline-flex items-center gap-1 px-2.5 py-1 rounded bg-slate-900 hover:bg-slate-800 text-white text-xs font-semibold shadow-2xs transition"
+          onClick={() => onToggleCompleted(classroom.id)}
+          className={`px-2.5 py-1.5 rounded-lg text-xs font-medium transition-colors flex items-center gap-1 border ${
+            classroom.isCompleted
+              ? 'bg-emerald-100 text-emerald-800 border-emerald-300 hover:bg-emerald-200'
+              : 'bg-white text-slate-600 border-slate-300 hover:bg-slate-100'
+          }`}
+          title="標記該班級桌椅是否已調整完成"
         >
-          <Edit3 className="w-3 h-3 text-emerald-400" />
-          <span>回報清點數量</span>
+          {classroom.isCompleted ? (
+            <>
+              <CheckSquare className="w-3.5 h-3.5 text-emerald-600" />
+              <span>已完成</span>
+            </>
+          ) : (
+            <>
+              <Square className="w-3.5 h-3.5 text-slate-400" />
+              <span>標記完成</span>
+            </>
+          )}
         </button>
+
+        <div className="flex items-center gap-1.5">
+          {/* Match / Transfer Button if there is shortage or surplus */}
+          {onOpenCoordinate && (status.deskDifference !== 0 || status.chairDifference !== 0) && (
+            <button
+              onClick={() => onOpenCoordinate(classroom)}
+              className="px-2.5 py-1.5 bg-amber-500 hover:bg-amber-600 text-white rounded-lg text-xs font-medium transition-colors flex items-center gap-1 shadow-2xs"
+              title="媒合協助搬運多餘或撥補缺少的桌椅"
+            >
+              <ArrowRightLeft className="w-3.5 h-3.5" />
+              <span>調配</span>
+            </button>
+          )}
+
+          {/* Edit / Report Button */}
+          <button
+            onClick={() => onOpenReport(classroom)}
+            className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-xs font-semibold transition-colors flex items-center gap-1.5 shadow-xs"
+          >
+            <Edit3 className="w-3.5 h-3.5" />
+            <span>{classroom.reported ? '修改回報' : '回報桌椅'}</span>
+          </button>
+        </div>
+
       </div>
     </div>
   );
 };
-

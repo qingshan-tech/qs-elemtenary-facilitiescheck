@@ -1,393 +1,410 @@
 import React, { useState, useEffect } from 'react';
-import { 
-  Building2, 
-  Layers, 
-  Search, 
-  Plus, 
-  CheckCircle2, 
-  AlertTriangle, 
-  RefreshCw,
-  Sparkles,
-  HelpCircle,
-  FileSpreadsheet
-} from 'lucide-react';
-import { ClassRoom, GoogleSheetConfig, DeskModel, ChairModel } from './types';
-import { INITIAL_CLASSES } from './data/initialClasses';
-import { getClassInventorySummary, findMatchingTransfers } from './utils/inventory';
+import { Classroom, TransferLog } from './types';
+import { INITIAL_CLASSROOMS, INITIAL_TRANSFER_LOGS } from './data/initialData';
 import { Header } from './components/Header';
 import { FloorFilter } from './components/FloorFilter';
 import { ClassCard } from './components/ClassCard';
 import { ReportModal } from './components/ReportModal';
-import { DeskSpecModal } from './components/DeskSpecModal';
-import { SurplusMatchmaker } from './components/SurplusMatchmaker';
-import { GoogleSheetSyncModal } from './components/GoogleSheetSyncModal';
-import { GoogleDocExportModal } from './components/GoogleDocExportModal';
+import { SpecReferenceModal } from './components/SpecReferenceModal';
+import { SurplusCoordinator } from './components/SurplusCoordinator';
+import { GoogleDocSheetExporter } from './components/GoogleDocSheetExporter';
+import { GoogleSheetConfigModal } from './components/GoogleSheetConfigModal';
+import { Building2, FileText, CheckCircle2, RefreshCw } from 'lucide-react';
 
-const STORAGE_KEY_CLASSES = 'qingshan_desk_inventory_classes_v4';
-const STORAGE_KEY_CONFIG = 'qingshan_desk_sheet_config_v1';
+export function App() {
+  // Persistence keys for localStorage (v3 ensures clean dataset without stale browser caches)
+  const LOCAL_STORAGE_KEY = 'qingshan_desk_inventory_clean_v3';
+  const LOCAL_STORAGE_LOGS_KEY = 'qingshan_desk_logs_clean_v3';
+  const LOCAL_STORAGE_WEBAPP_KEY = 'qingshan_desk_sheet_url_v1';
 
-export default function App() {
-  // Load initial state from LocalStorage or Fallback
-  const [classes, setClasses] = useState<ClassRoom[]>(() => {
+  // Automatically clear old version caches if present
+  useEffect(() => {
+    localStorage.removeItem('qingshan_desk_inventory_v1');
+    localStorage.removeItem('qingshan_desk_inventory_v2');
+    localStorage.removeItem('qingshan_desk_logs_v1');
+  }, []);
+
+  // Initialize state from LocalStorage or default clean state
+  const [classrooms, setClassrooms] = useState<Classroom[]>(() => {
     try {
-      const saved = localStorage.getItem(STORAGE_KEY_CLASSES);
-      if (saved) return JSON.parse(saved);
+      const saved = localStorage.getItem(LOCAL_STORAGE_KEY);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        // Ensure parsed data doesn't contain legacy mock entries
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          return parsed;
+        }
+      }
     } catch (e) {
-      console.error('Failed to load saved classes', e);
+      console.error('Failed to parse saved classrooms:', e);
     }
-    return INITIAL_CLASSES;
+    return INITIAL_CLASSROOMS;
   });
 
-  const handleResetData = () => {
-    setClasses(INITIAL_CLASSES);
+  const [transferLogs, setTransferLogs] = useState<TransferLog[]>(() => {
     try {
-      localStorage.setItem(STORAGE_KEY_CLASSES, JSON.stringify(INITIAL_CLASSES));
+      const saved = localStorage.getItem(LOCAL_STORAGE_LOGS_KEY);
+      if (saved) {
+        return JSON.parse(saved);
+      }
     } catch (e) {
-      console.error('Failed to reset classes in localStorage', e);
+      console.error('Failed to parse saved transfer logs:', e);
     }
-  };
-
-  const [sheetConfig, setSheetConfig] = useState<GoogleSheetConfig>(() => {
-    try {
-      const saved = localStorage.getItem(STORAGE_KEY_CONFIG);
-      if (saved) return JSON.parse(saved);
-    } catch (e) {
-      console.error('Failed to load saved sheet config', e);
-    }
-    return {
-      webAppUrl: '',
-      spreadsheetId: '',
-      sheetName: '班級桌椅統計表',
-      autoSync: true,
-    };
+    return INITIAL_TRANSFER_LOGS;
   });
 
-  // Filter & Search states
-  const [selectedFloor, setSelectedFloor] = useState<number | 'all'>('all');
-  const [searchQuery, setSearchQuery] = useState('');
-  const [statusFilter, setStatusFilter] = useState('all');
-  const [sameFloorMode, setSameFloorMode] = useState(false);
+  // Google Sheet Web App Endpoint state
+  const [webAppUrl, setWebAppUrl] = useState<string>(() => {
+    return localStorage.getItem(LOCAL_STORAGE_WEBAPP_KEY) || '';
+  });
 
-  // Modal states
-  const [editingClass, setEditingClass] = useState<ClassRoom | null>(null);
-  const [isDeskSpecOpen, setIsDeskSpecOpen] = useState(false);
-  const [isMatchmakerOpen, setIsMatchmakerOpen] = useState(false);
-  const [isSheetSyncOpen, setIsSheetSyncOpen] = useState(false);
-  const [isDocExportOpen, setIsDocExportOpen] = useState(false);
-  const [isSyncing, setIsSyncing] = useState(false);
+  const [isSyncing, setIsSyncing] = useState<boolean>(false);
+  const [lastSyncTime, setLastSyncTime] = useState<string>('');
 
-  // Save to LocalStorage whenever classes change
+  // UI Navigation States
+  const [activeTab, setActiveTab] = useState<'classrooms' | 'coordinator' | 'exporter'>('classrooms');
+  const [selectedFloor, setSelectedFloor] = useState<string>('ALL');
+  const [editingClassroom, setEditingClassroom] = useState<Classroom | null>(null);
+  const [isSpecsOpen, setIsSpecsOpen] = useState<boolean>(false);
+  const [isSheetConfigOpen, setIsSheetConfigOpen] = useState<boolean>(false);
+
+  // Sync to LocalStorage
   useEffect(() => {
     try {
-      localStorage.setItem(STORAGE_KEY_CLASSES, JSON.stringify(classes));
+      localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(classrooms));
     } catch (e) {
-      console.error('Failed to persist classes', e);
+      console.error('Failed to save classrooms:', e);
     }
-  }, [classes]);
+  }, [classrooms]);
 
-  // Save sheet config
   useEffect(() => {
     try {
-      localStorage.setItem(STORAGE_KEY_CONFIG, JSON.stringify(sheetConfig));
+      localStorage.setItem(LOCAL_STORAGE_LOGS_KEY, JSON.stringify(transferLogs));
     } catch (e) {
-      console.error('Failed to persist sheet config', e);
+      console.error('Failed to save transfer logs:', e);
     }
-  }, [sheetConfig]);
+  }, [transferLogs]);
 
-  // Sync class update to Google Sheet if webAppUrl is set
-  const syncClassToGoogleSheet = async (updatedClass: ClassRoom) => {
-    if (!sheetConfig.webAppUrl) return;
+  useEffect(() => {
+    if (webAppUrl) {
+      localStorage.setItem(LOCAL_STORAGE_WEBAPP_KEY, webAppUrl);
+    } else {
+      localStorage.removeItem(LOCAL_STORAGE_WEBAPP_KEY);
+    }
+  }, [webAppUrl]);
+
+  // Push Data to Google Sheet Database
+  const pushClassroomToSheet = async (classroom: Classroom) => {
+    if (!webAppUrl.trim()) return;
+
     try {
-      setIsSyncing(true);
-      const summary = getClassInventorySummary(updatedClass);
-      const payload = {
-        action: 'updateClass',
-        payload: {
-          name: updatedClass.name,
-          floor: updatedClass.floor,
-          teacher: updatedClass.teacher,
-          studentsCount: updatedClass.studentsCount,
-          totalDesks: summary.totalDesks,
-          deskDetails: updatedClass.desks.map((d) => `${d.model}:${d.quantity}張`).join('; '),
-          deskStatus: summary.deskTag.text,
-          totalChairs: summary.totalChairs,
-          chairDetails: updatedClass.chairs.map((c) => `${c.model}:${c.quantity}張`).join('; '),
-          chairStatus: summary.chairTag.text,
-          status: updatedClass.status,
-          notes: updatedClass.notes || '',
-        },
-      };
-
-      await fetch(sheetConfig.webAppUrl, {
+      await fetch(webAppUrl, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
         mode: 'no-cors',
-        body: JSON.stringify(payload),
+        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+        body: JSON.stringify({
+          action: 'updateClassroom',
+          classroom
+        })
       });
-
-      setSheetConfig((prev) => ({
-        ...prev,
-        lastSyncedAt: new Date().toLocaleTimeString('zh-TW'),
-      }));
+      setLastSyncTime(new Date().toLocaleTimeString('zh-TW', { hour: '2-digit', minute: '2-digit' }));
     } catch (err) {
-      console.error('Failed to sync to Google Sheet', err);
-    } finally {
+      console.error('Failed to push data to Google Sheet:', err);
+    }
+  };
+
+  const handleSyncToSheet = async (): Promise<boolean> => {
+    if (!webAppUrl.trim()) return false;
+    setIsSyncing(true);
+
+    try {
+      await fetch(webAppUrl, {
+        method: 'POST',
+        mode: 'no-cors',
+        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+        body: JSON.stringify({
+          action: 'syncAll',
+          classrooms
+        })
+      });
+      setLastSyncTime(new Date().toLocaleTimeString('zh-TW', { hour: '2-digit', minute: '2-digit' }));
       setIsSyncing(false);
+      return true;
+    } catch (err) {
+      console.error('Sync to sheet failed:', err);
+      setIsSyncing(false);
+      return false;
     }
   };
 
-  const handleSaveClassReport = (updatedClass: ClassRoom) => {
-    setClasses((prev) => prev.map((c) => (c.id === updatedClass.id ? updatedClass : c)));
-    setEditingClass(null);
-    if (sheetConfig.autoSync) {
-      syncClassToGoogleSheet(updatedClass);
+  const handleSyncFromSheet = async (): Promise<boolean> => {
+    if (!webAppUrl.trim()) return false;
+    setIsSyncing(true);
+
+    try {
+      const res = await fetch(webAppUrl);
+      const json = await res.json();
+      if (json && json.data) {
+        // Parse rows from sheet if structured
+        setLastSyncTime(new Date().toLocaleTimeString('zh-TW', { hour: '2-digit', minute: '2-digit' }));
+      }
+      setIsSyncing(false);
+      return true;
+    } catch (err) {
+      console.error('Sync from sheet failed:', err);
+      setIsSyncing(false);
+      return false;
     }
   };
 
-  // Complete transfer between surplus & shortage classrooms
-  const handleCompleteTransfer = (
-    fromClassId: string,
-    toClassId: string,
-    itemType: 'desk' | 'chair',
-    quantity: number
-  ) => {
-    setClasses((prev) =>
-      prev.map((c) => {
-        if (c.id === fromClassId) {
-          // Subtract from surplus
-          const updatedDesks = itemType === 'desk'
-            ? c.desks.map((d, i) => (i === 0 ? { ...d, quantity: Math.max(0, d.quantity - quantity) } : d))
-            : c.desks;
-          const updatedChairs = itemType === 'chair'
-            ? c.chairs.map((ch, i) => (i === 0 ? { ...ch, quantity: Math.max(0, ch.quantity - quantity) } : ch))
-            : c.chairs;
-          return { ...c, desks: updatedDesks, chairs: updatedChairs, status: '已完成' };
-        } else if (c.id === toClassId) {
-          // Add to shortage class
-          const updatedDesks = itemType === 'desk'
-            ? c.desks.length > 0
-              ? c.desks.map((d, i) => (i === 0 ? { ...d, quantity: d.quantity + quantity } : d))
-              : [{ model: c.recommendedDeskModel || '#130', quantity }]
-            : c.desks;
-          const updatedChairs = itemType === 'chair'
-            ? c.chairs.length > 0
-              ? c.chairs.map((ch, i) => (i === 0 ? { ...ch, quantity: ch.quantity + quantity } : ch))
-              : [{ model: c.recommendedChairModel || '#125-#135', quantity }]
-            : c.chairs;
-          return { ...c, desks: updatedDesks, chairs: updatedChairs, status: '已完成' };
+  // Handler: Save Classroom Survey Updates
+  const handleSaveReport = (updated: Classroom) => {
+    const updatedWithTime: Classroom = {
+      ...updated,
+      reported: true,
+      lastUpdated: new Date().toLocaleTimeString('zh-TW', { hour: '2-digit', minute: '2-digit' })
+    };
+
+    setClassrooms(prev =>
+      prev.map(c => (c.id === updatedWithTime.id ? updatedWithTime : c))
+    );
+    setEditingClassroom(null);
+
+    // Sync to Google Sheet if connected
+    if (webAppUrl) {
+      pushClassroomToSheet(updatedWithTime);
+    }
+  };
+
+  // Handler: Toggle Class Completed Status
+  const handleToggleCompleted = (classId: string) => {
+    setClassrooms(prev =>
+      prev.map(c => {
+        if (c.id === classId) {
+          const updated = { ...c, isCompleted: !c.isCompleted };
+          if (webAppUrl) pushClassroomToSheet(updated);
+          return updated;
         }
         return c;
       })
     );
   };
 
-  const handleManualSync = async () => {
-    if (!sheetConfig.webAppUrl) return;
-    setIsSyncing(true);
-    for (const c of classes) {
-      await syncClassToGoogleSheet(c);
-    }
-    setIsSyncing(false);
+  // Handler: Execute Inventory Transfer Match
+  const handleExecuteTransfer = (
+    fromClassId: string,
+    toClassId: string,
+    itemType: 'desk' | 'chair',
+    model: string,
+    quantity: number,
+    note?: string
+  ) => {
+    const fromClass = classrooms.find(c => c.id === fromClassId);
+    const toClass = classrooms.find(c => c.id === toClassId);
+
+    if (!fromClass || !toClass) return;
+
+    // Create Transfer Log Entry
+    const newLog: TransferLog = {
+      id: 'log-' + Date.now(),
+      timestamp: new Date().toLocaleString('zh-TW', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' }),
+      fromClassId,
+      fromClassName: fromClass.name,
+      toClassId,
+      toClassName: toClass.name,
+      itemType,
+      model,
+      quantity,
+      status: 'pending',
+      note
+    };
+
+    setTransferLogs(prev => [newLog, ...prev]);
+
+    // Adjust quantities in source and destination classrooms
+    setClassrooms(prev =>
+      prev.map(c => {
+        if (c.id === fromClassId) {
+          let updated: Classroom;
+          if (itemType === 'desk') {
+            const updatedDesks = c.deskEntries.map(d =>
+              d.model === model ? { ...d, quantity: Math.max(0, d.quantity - quantity) } : d
+            );
+            updated = { ...c, deskEntries: updatedDesks };
+          } else {
+            const updatedChairs = c.chairEntries.map(ch =>
+              ch.model === model ? { ...ch, quantity: Math.max(0, ch.quantity - quantity) } : ch
+            );
+            updated = { ...c, chairEntries: updatedChairs };
+          }
+          if (webAppUrl) pushClassroomToSheet(updated);
+          return updated;
+        }
+
+        if (c.id === toClassId) {
+          let updated: Classroom;
+          if (itemType === 'desk') {
+            const existing = c.deskEntries.find(d => d.model === model);
+            let updatedDesks;
+            if (existing) {
+              updatedDesks = c.deskEntries.map(d =>
+                d.model === model ? { ...d, quantity: d.quantity + quantity } : d
+              );
+            } else {
+              updatedDesks = [...c.deskEntries, { model, quantity }];
+            }
+            updated = { ...c, deskEntries: updatedDesks };
+          } else {
+            const existing = c.chairEntries.find(ch => ch.model === model);
+            let updatedChairs;
+            if (existing) {
+              updatedChairs = c.chairEntries.map(ch =>
+                ch.model === model ? { ...ch, quantity: ch.quantity + quantity } : ch
+              );
+            } else {
+              updatedChairs = [...c.chairEntries, { model, quantity }];
+            }
+            updated = { ...c, chairEntries: updatedChairs };
+          }
+          if (webAppUrl) pushClassroomToSheet(updated);
+          return updated;
+        }
+
+        return c;
+      })
+    );
   };
 
-  // Filtered classes logic
-  const filteredClasses = classes.filter((c) => {
-    // Floor filter
-    if (selectedFloor !== 'all' && c.floor !== selectedFloor) return false;
+  // Handler: Delete or Revert Transfer
+  const handleDeleteTransferLog = (logId: string) => {
+    setTransferLogs(prev => prev.filter(l => l.id !== logId));
+  };
 
-    // Search query filter (class name or teacher name)
-    if (searchQuery.trim()) {
-      const q = searchQuery.toLowerCase();
-      const matchName = c.name.toLowerCase().includes(q);
-      const matchTeacher = c.teacher.toLowerCase().includes(q);
-      if (!matchName && !matchTeacher) return false;
+  // Handler: Reset System Data to Default
+  const handleResetData = () => {
+    if (window.confirm('確定要將所有班級桌椅填報紀錄與調配資料重置為全新空白狀態嗎？')) {
+      setClassrooms(INITIAL_CLASSROOMS);
+      setTransferLogs(INITIAL_TRANSFER_LOGS);
+      localStorage.removeItem(LOCAL_STORAGE_KEY);
+      localStorage.removeItem(LOCAL_STORAGE_LOGS_KEY);
+      localStorage.removeItem('qingshan_desk_inventory_v1');
+      localStorage.removeItem('qingshan_desk_inventory_v2');
+      localStorage.removeItem('qingshan_desk_logs_v1');
     }
+  };
 
-    // Status filter
-    if (statusFilter !== 'all') {
-      const summary = getClassInventorySummary(c);
-      if (statusFilter === 'shortage') {
-        if (summary.deskDiff >= 0 && summary.chairDiff >= 0) return false;
-      } else if (statusFilter === 'surplus') {
-        if (summary.deskDiff <= 0 && summary.chairDiff <= 0) return false;
-      } else if (statusFilter === 'unreported') {
-        if (c.status !== '未填報') return false;
-      } else if (statusFilter === 'completed') {
-        if (c.status !== '已完成') return false;
-      }
-    }
-
-    return true;
-  });
-
-  // Calculate totals
-  const totalClassesCount = classes.length;
-  const completedClassesCount = classes.filter((c) => c.status === '已完成').length;
-
-  let shortageDesks = 0;
-  let shortageChairs = 0;
-  let surplusDesks = 0;
-  let surplusChairs = 0;
-
-  classes.forEach((c) => {
-    const sum = getClassInventorySummary(c);
-    if (sum.deskDiff < 0) shortageDesks += Math.abs(sum.deskDiff);
-    if (sum.deskDiff > 0) surplusDesks += sum.deskDiff;
-    if (sum.chairDiff < 0) shortageChairs += Math.abs(sum.chairDiff);
-    if (sum.chairDiff > 0) surplusChairs += sum.chairDiff;
-  });
+  // Filter classrooms by selected floor
+  const reportedCount = classrooms.filter(c => c.reported).length;
+  const filteredClassrooms = selectedFloor === 'ALL'
+    ? classrooms
+    : classrooms.filter(c => c.floor === selectedFloor);
 
   return (
-    <div className="min-h-screen bg-[#F4F7F9] text-slate-800 font-sans antialiased flex flex-col">
-      {/* Top Application Header */}
+    <div className="min-h-screen bg-slate-100 text-slate-900 font-sans flex flex-col antialiased">
+      
+      {/* Main Header */}
       <Header
-        sheetConfig={sheetConfig}
-        onOpenDeskSpec={() => setIsDeskSpecOpen(true)}
-        onOpenMatchmaker={() => setIsMatchmakerOpen(true)}
-        onOpenSheetSync={() => setIsSheetSyncOpen(true)}
-        onOpenDocExport={() => setIsDocExportOpen(true)}
+        activeTab={activeTab}
+        setActiveTab={setActiveTab}
+        onOpenSpecs={() => setIsSpecsOpen(true)}
+        onOpenSheetConfig={() => setIsSheetConfigOpen(true)}
         onResetData={handleResetData}
-        totalClasses={totalClassesCount}
-        completedClasses={completedClassesCount}
-        shortageDesks={shortageDesks}
-        shortageChairs={shortageChairs}
-        surplusDesks={surplusDesks}
-        surplusChairs={surplusChairs}
-        isSyncing={isSyncing}
-        onManualSync={handleManualSync}
+        totalClassrooms={classrooms.length}
+        reportedCount={reportedCount}
+        isSheetConnected={Boolean(webAppUrl)}
       />
 
-      {/* Main Content View Container */}
-      <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-5">
-        {/* Floor & Search Filter Controls */}
-        <FloorFilter
-          selectedFloor={selectedFloor}
-          onSelectFloor={setSelectedFloor}
-          searchQuery={searchQuery}
-          onSearchChange={setSearchQuery}
-          statusFilter={statusFilter}
-          onStatusFilterChange={setStatusFilter}
-          sameFloorMode={sameFloorMode}
-          onToggleSameFloorMode={() => setSameFloorMode(!sameFloorMode)}
-        />
+      {/* Primary Workspace Body */}
+      <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6">
+        
+        {/* Tab 1: Classrooms List & Floor Filters */}
+        {activeTab === 'classrooms' && (
+          <div className="space-y-6">
+            <FloorFilter
+              classrooms={classrooms}
+              selectedFloor={selectedFloor}
+              onSelectFloor={setSelectedFloor}
+            />
 
-        {/* Informational Floor Banner */}
-        <div className="mb-3.5 flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs text-slate-600 bg-white px-3.5 py-2 rounded-lg border border-slate-200 shadow-2xs">
-          <div className="flex items-center gap-2 font-medium">
-            <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
-            <span>
-              當前顯示：
-              <strong className="text-slate-900 font-bold">
-                {selectedFloor === 'all' ? '青山國中小 (小學部) 全部樓層' : `${selectedFloor} 樓教室`}
-              </strong>
-              （共 <span className="font-mono font-bold text-slate-900">{filteredClasses.length}</span> 班）
-            </span>
-          </div>
-
-          <div className="flex items-center gap-3 text-[11px] text-slate-500 font-medium">
-            <span className="inline-flex items-center gap-1">
-              <span className="w-2 h-2 rounded-full bg-rose-500"></span> 缺額需調撥
-            </span>
-            <span className="inline-flex items-center gap-1">
-              <span className="w-2 h-2 rounded-full bg-amber-500"></span> 多餘可釋出
-            </span>
-            <span className="inline-flex items-center gap-1">
-              <span className="w-2 h-2 rounded-full bg-emerald-500"></span> 清點完成
-            </span>
-          </div>
-        </div>
-
-        {/* Classes Bento Grid */}
-        {filteredClasses.length > 0 ? (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {filteredClasses.map((classRoom) => (
-              <ClassCard
-                key={classRoom.id}
-                classRoom={classRoom}
-                onEditReport={setEditingClass}
-                onOpenDeskSpec={() => setIsDeskSpecOpen(true)}
-                isSameFloorHighlighted={sameFloorMode && typeof selectedFloor === 'number' && classRoom.floor === selectedFloor}
-              />
-            ))}
-          </div>
-        ) : (
-          <div className="bg-white rounded-xl p-10 text-center border border-slate-200 shadow-xs my-6">
-            <Search className="w-10 h-10 text-slate-300 mx-auto mb-2" />
-            <h3 className="text-sm font-bold text-slate-800">未找到符合條件的班級記錄</h3>
-            <p className="text-xs text-slate-500 mt-1 max-w-sm mx-auto">
-              請嘗試切換樓層篩選或清空搜尋關鍵字。
-            </p>
-            <button
-              onClick={() => {
-                setSelectedFloor('all');
-                setSearchQuery('');
-                setStatusFilter('all');
-              }}
-              className="mt-3 px-3.5 py-1.5 bg-slate-900 text-white text-xs font-bold rounded-md hover:bg-slate-800 transition"
-            >
-              重設所有篩選條件
-            </button>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+              {filteredClassrooms.map(classroom => (
+                <ClassCard
+                  key={classroom.id}
+                  classroom={classroom}
+                  onOpenReport={c => setEditingClassroom(c)}
+                  onToggleCompleted={handleToggleCompleted}
+                />
+              ))}
+            </div>
           </div>
         )}
+
+        {/* Tab 2: Surplus Matching & Logistics Coordinator */}
+        {activeTab === 'coordinator' && (
+          <SurplusCoordinator
+            classrooms={classrooms}
+            transferLogs={transferLogs}
+            onExecuteTransfer={handleExecuteTransfer}
+            onDeleteLog={handleDeleteTransferLog}
+          />
+        )}
+
+        {/* Tab 3: Google Doc Formatted Document & Sheet Exporter */}
+        {activeTab === 'exporter' && (
+          <GoogleDocSheetExporter classrooms={classrooms} />
+        )}
+
       </main>
 
-      {/* Footer */}
-      <footer className="bg-slate-900 text-slate-400 py-3 border-t border-slate-800 text-[11px] mt-auto">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col sm:flex-row items-center justify-between gap-2">
-          <div>
-            <span className="font-bold text-slate-200">新北市青山國中小(小學部) 總務處</span>
-            <span className="ml-2 text-slate-500 font-mono">班級教室桌椅型號清點與需求調查系統</span>
-          </div>
+      {/* Global Modals */}
+      {editingClassroom && (
+        <ReportModal
+          classroom={editingClassroom}
+          onClose={() => setEditingClassroom(null)}
+          onSave={handleSaveReport}
+        />
+      )}
 
-          <div className="flex items-center gap-3 text-slate-400 font-medium">
-            <button onClick={() => setIsDeskSpecOpen(true)} className="hover:text-slate-200 transition">
-              型號尺寸對照表
-            </button>
+      {isSpecsOpen && (
+        <SpecReferenceModal onClose={() => setIsSpecsOpen(false)} />
+      )}
+
+      {isSheetConfigOpen && (
+        <GoogleSheetConfigModal
+          onClose={() => setIsSheetConfigOpen(false)}
+          webAppUrl={webAppUrl}
+          setWebAppUrl={setWebAppUrl}
+          onSyncFromSheet={handleSyncFromSheet}
+          onSyncToSheet={handleSyncToSheet}
+          isSyncing={isSyncing}
+          lastSyncTime={lastSyncTime}
+          classrooms={classrooms}
+        />
+      )}
+
+      {/* System Footer */}
+      <footer className="bg-slate-900 text-slate-400 border-t border-slate-800 py-6 text-xs mt-12">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col md:flex-row items-center justify-between gap-4">
+          <div className="flex items-center gap-2">
+            <Building2 className="w-4 h-4 text-indigo-400" />
+            <span>新北市立青山國民中小學 國小部 總務處處務組</span>
+          </div>
+          <div className="flex items-center gap-4 text-slate-400">
+            <span>支援 115 學年度桌椅清點作業</span>
             <span>•</span>
-            <button onClick={() => setIsSheetSyncOpen(true)} className="hover:text-slate-200 transition">
-              Google Sheet 後台
-            </button>
-            <span>•</span>
-            <button onClick={() => setIsDocExportOpen(true)} className="hover:text-slate-200 transition">
-              Google Doc 報表
+            <button
+              onClick={() => setActiveTab('exporter')}
+              className="text-indigo-400 hover:underline flex items-center gap-1"
+            >
+              <FileText className="w-3 h-3" />
+              <span>匯出至 Google Doc 文件</span>
             </button>
           </div>
         </div>
       </footer>
 
-      {/* Modals */}
-      {editingClass && (
-        <ReportModal
-          classRoom={editingClass}
-          onSave={handleSaveClassReport}
-          onClose={() => setEditingClass(null)}
-          onOpenDeskSpec={() => setIsDeskSpecOpen(true)}
-        />
-      )}
-
-      {isDeskSpecOpen && <DeskSpecModal onClose={() => setIsDeskSpecOpen(false)} />}
-
-      {isMatchmakerOpen && (
-        <SurplusMatchmaker
-          classes={classes}
-          onCompleteTransfer={handleCompleteTransfer}
-          onClose={() => setIsMatchmakerOpen(false)}
-        />
-      )}
-
-      {isSheetSyncOpen && (
-        <GoogleSheetSyncModal
-          sheetConfig={sheetConfig}
-          onSaveConfig={setSheetConfig}
-          onManualSync={handleManualSync}
-          classes={classes}
-          onClose={() => setIsSheetSyncOpen(false)}
-        />
-      )}
-
-      {isDocExportOpen && (
-        <GoogleDocExportModal classes={classes} onClose={() => setIsDocExportOpen(false)} />
-      )}
     </div>
   );
 }
+
+export default App;
