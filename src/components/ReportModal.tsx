@@ -15,15 +15,15 @@ import {
 
 interface Props {
   classroom: Classroom | null;
-  isOpen: boolean;
+  isOpen?: boolean;
   onClose: () => void;
   onSave: (updatedClassroom: Classroom) => void;
-  onOpenSpecs: () => void;
+  onOpenSpecs?: () => void;
 }
 
 export const ReportModal: React.FC<Props> = ({
   classroom,
-  isOpen,
+  isOpen = true,
   onClose,
   onSave,
   onOpenSpecs
@@ -125,7 +125,7 @@ export const ReportModal: React.FC<Props> = ({
   };
 
   return (
-    <div className="fixed inset-[#000000] z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs overflow-y-auto animate-fade-in">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs overflow-y-auto animate-fade-in">
       <div className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full max-h-[90vh] flex flex-col border border-slate-200 overflow-hidden">
         
         {/* Header */}

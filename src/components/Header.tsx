@@ -51,7 +51,7 @@ export const Header: React.FC<Props> = ({
                 </span>
               </div>
               <p className="text-xs text-slate-400 mt-0.5">
-                新北市立青山國民中小學 (國小部) 各班級教室桌椅清點、即時調配與 Google Doc/Sheet 整合
+                新北市立青山國民中小學 (國小部) 各班級教室桌椅清點
               </p>
             </div>
           </div>

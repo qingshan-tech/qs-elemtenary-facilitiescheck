@@ -3,15 +3,15 @@ import { DESK_SPECS, CHAIR_SPECS } from '../data/initialData';
 import { X, ExternalLink, Info, CheckCircle2 } from 'lucide-react';
 
 interface Props {
-  isOpen: boolean;
+  isOpen?: boolean;
   onClose: () => void;
 }
 
-export const SpecReferenceModal: React.FC<Props> = ({ isOpen, onClose }) => {
+export const SpecReferenceModal: React.FC<Props> = ({ isOpen = true, onClose }) => {
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-[#000000] z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs overflow-y-auto animate-fade-in">
+    <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs overflow-y-auto animate-fade-in">
       <div className="bg-white rounded-2xl shadow-2xl max-w-4xl w-full max-h-[90vh] flex flex-col border border-slate-200 overflow-hidden">
         {/* Modal Header */}
         <div className="p-5 bg-gradient-to-r from-slate-900 to-indigo-950 text-white flex justify-between items-center shrink-0">

@@ -12,16 +12,18 @@ import { GoogleSheetConfigModal } from './components/GoogleSheetConfigModal';
 import { Building2, FileText, CheckCircle2, RefreshCw } from 'lucide-react';
 
 export function App() {
-  // Persistence keys for localStorage (v3 ensures clean dataset without stale browser caches)
-  const LOCAL_STORAGE_KEY = 'qingshan_desk_inventory_clean_v3';
-  const LOCAL_STORAGE_LOGS_KEY = 'qingshan_desk_logs_clean_v3';
+  // Persistence keys for localStorage (v4 ensures fresh clean launch)
+  const LOCAL_STORAGE_KEY = 'qingshan_desk_inventory_clean_v4';
+  const LOCAL_STORAGE_LOGS_KEY = 'qingshan_desk_logs_clean_v4';
   const LOCAL_STORAGE_WEBAPP_KEY = 'qingshan_desk_sheet_url_v1';
 
   // Automatically clear old version caches if present
   useEffect(() => {
     localStorage.removeItem('qingshan_desk_inventory_v1');
     localStorage.removeItem('qingshan_desk_inventory_v2');
+    localStorage.removeItem('qingshan_desk_inventory_clean_v3');
     localStorage.removeItem('qingshan_desk_logs_v1');
+    localStorage.removeItem('qingshan_desk_logs_clean_v3');
   }, []);
 
   // Initialize state from LocalStorage or default clean state
@@ -333,6 +335,7 @@ export function App() {
                   classroom={classroom}
                   onOpenReport={c => setEditingClassroom(c)}
                   onToggleCompleted={handleToggleCompleted}
+                  onOpenCoordinate={() => setActiveTab('coordinator')}
                 />
               ))}
             </div>
@@ -360,13 +363,15 @@ export function App() {
       {editingClassroom && (
         <ReportModal
           classroom={editingClassroom}
+          isOpen={Boolean(editingClassroom)}
           onClose={() => setEditingClassroom(null)}
           onSave={handleSaveReport}
+          onOpenSpecs={() => setIsSpecsOpen(true)}
         />
       )}
 
       {isSpecsOpen && (
-        <SpecReferenceModal onClose={() => setIsSpecsOpen(false)} />
+        <SpecReferenceModal isOpen={isSpecsOpen} onClose={() => setIsSpecsOpen(false)} />
       )}
 
       {isSheetConfigOpen && (
@@ -387,18 +392,11 @@ export function App() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col md:flex-row items-center justify-between gap-4">
           <div className="flex items-center gap-2">
             <Building2 className="w-4 h-4 text-indigo-400" />
-            <span>新北市立青山國民中小學 國小部 總務處處務組</span>
+            <span>新北市立青山國民中小學 國小部 總務處</span>
           </div>
           <div className="flex items-center gap-4 text-slate-400">
             <span>支援 115 學年度桌椅清點作業</span>
             <span>•</span>
-            <button
-              onClick={() => setActiveTab('exporter')}
-              className="text-indigo-400 hover:underline flex items-center gap-1"
-            >
-              <FileText className="w-3 h-3" />
-              <span>匯出至 Google Doc 文件</span>
-            </button>
           </div>
         </div>
       </footer>
