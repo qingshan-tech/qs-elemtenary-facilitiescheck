@@ -9,12 +9,14 @@ import { SpecReferenceModal } from './components/SpecReferenceModal';
 import { SurplusCoordinator } from './components/SurplusCoordinator';
 import { GoogleDocSheetExporter } from './components/GoogleDocSheetExporter';
 import { GoogleSheetConfigModal } from './components/GoogleSheetConfigModal';
+import { PasswordAuthModal } from './components/PasswordAuthModal';
+import { ClassDetailModal } from './components/ClassDetailModal';
 import { Building2, FileText, CheckCircle2, RefreshCw } from 'lucide-react';
 
 export function App() {
-  // Persistence keys for localStorage (v4 ensures fresh clean launch)
-  const LOCAL_STORAGE_KEY = 'qingshan_desk_inventory_clean_v4';
-  const LOCAL_STORAGE_LOGS_KEY = 'qingshan_desk_logs_clean_v4';
+  // Persistence keys for localStorage (v5 ensures updated clean data without extra titles)
+  const LOCAL_STORAGE_KEY = 'qingshan_desk_inventory_clean_v5';
+  const LOCAL_STORAGE_LOGS_KEY = 'qingshan_desk_logs_clean_v5';
   const LOCAL_STORAGE_WEBAPP_KEY = 'qingshan_desk_sheet_url_v1';
 
   // Automatically clear old version caches if present
@@ -22,8 +24,10 @@ export function App() {
     localStorage.removeItem('qingshan_desk_inventory_v1');
     localStorage.removeItem('qingshan_desk_inventory_v2');
     localStorage.removeItem('qingshan_desk_inventory_clean_v3');
+    localStorage.removeItem('qingshan_desk_inventory_clean_v4');
     localStorage.removeItem('qingshan_desk_logs_v1');
     localStorage.removeItem('qingshan_desk_logs_clean_v3');
+    localStorage.removeItem('qingshan_desk_logs_clean_v4');
   }, []);
 
   // Initialize state from LocalStorage or default clean state
@@ -63,12 +67,32 @@ export function App() {
   const [isSyncing, setIsSyncing] = useState<boolean>(false);
   const [lastSyncTime, setLastSyncTime] = useState<string>('');
 
-  // UI Navigation States
+  // UI Navigation & Notification States
   const [activeTab, setActiveTab] = useState<'classrooms' | 'coordinator' | 'exporter'>('classrooms');
   const [selectedFloor, setSelectedFloor] = useState<string>('ALL');
   const [editingClassroom, setEditingClassroom] = useState<Classroom | null>(null);
+  const [detailClassroom, setDetailClassroom] = useState<Classroom | null>(null);
   const [isSpecsOpen, setIsSpecsOpen] = useState<boolean>(false);
   const [isSheetConfigOpen, setIsSheetConfigOpen] = useState<boolean>(false);
+  const [toastNotice, setToastNotice] = useState<string | null>(null);
+
+  const showToast = (msg: string) => {
+    setToastNotice(msg);
+    setTimeout(() => setToastNotice(null), 4000);
+  };
+
+  // Password Protection Modal state
+  const [passwordModalConfig, setPasswordModalConfig] = useState<{
+    isOpen: boolean;
+    title: string;
+    description: string;
+    onSuccess: () => void;
+  }>({
+    isOpen: false,
+    title: '',
+    description: '',
+    onSuccess: () => {}
+  });
 
   // Sync to LocalStorage
   useEffect(() => {
@@ -282,17 +306,33 @@ export function App() {
     setTransferLogs(prev => prev.filter(l => l.id !== logId));
   };
 
-  // Handler: Reset System Data to Default
-  const handleResetData = () => {
-    if (window.confirm('確定要將所有班級桌椅填報紀錄與調配資料重置為全新空白狀態嗎？')) {
-      setClassrooms(INITIAL_CLASSROOMS);
-      setTransferLogs(INITIAL_TRANSFER_LOGS);
-      localStorage.removeItem(LOCAL_STORAGE_KEY);
-      localStorage.removeItem(LOCAL_STORAGE_LOGS_KEY);
-      localStorage.removeItem('qingshan_desk_inventory_v1');
-      localStorage.removeItem('qingshan_desk_inventory_v2');
-      localStorage.removeItem('qingshan_desk_logs_v1');
-    }
+  // Handler: Password Request before Opening Google Sheet Config
+  const handleRequestSheetConfig = () => {
+    setPasswordModalConfig({
+      isOpen: true,
+      title: '連結 Google Sheet 資料庫',
+      description: '設定 Google Sheet 資料庫連線屬於管理權限，請輸入管理員密碼：',
+      onSuccess: () => setIsSheetConfigOpen(true)
+    });
+  };
+
+  // Handler: Password Request before Resetting Data
+  const handleRequestResetData = () => {
+    setPasswordModalConfig({
+      isOpen: true,
+      title: '重新歸零 (重置全校資料)',
+      description: '將所有班級清點紀錄與調配資料重置屬於高風險操作，請輸入管理員密碼 (admin)：',
+      onSuccess: () => {
+        setClassrooms(INITIAL_CLASSROOMS);
+        setTransferLogs(INITIAL_TRANSFER_LOGS);
+        localStorage.removeItem(LOCAL_STORAGE_KEY);
+        localStorage.removeItem(LOCAL_STORAGE_LOGS_KEY);
+        localStorage.removeItem('qingshan_desk_inventory_v1');
+        localStorage.removeItem('qingshan_desk_inventory_v2');
+        localStorage.removeItem('qingshan_desk_logs_v1');
+        showToast('🔄 全校班級填報紀錄與調配資料已成功重新歸零！');
+      }
+    });
   };
 
   // Filter classrooms by selected floor
@@ -309,8 +349,8 @@ export function App() {
         activeTab={activeTab}
         setActiveTab={setActiveTab}
         onOpenSpecs={() => setIsSpecsOpen(true)}
-        onOpenSheetConfig={() => setIsSheetConfigOpen(true)}
-        onResetData={handleResetData}
+        onOpenSheetConfig={handleRequestSheetConfig}
+        onResetData={handleRequestResetData}
         totalClassrooms={classrooms.length}
         reportedCount={reportedCount}
         isSheetConnected={Boolean(webAppUrl)}
@@ -318,6 +358,19 @@ export function App() {
 
       {/* Primary Workspace Body */}
       <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6">
+        
+        {/* Toast Notification Banner */}
+        {toastNotice && (
+          <div className="p-4 bg-emerald-600 text-white font-bold text-sm rounded-2xl shadow-lg border border-emerald-500 flex items-center justify-between animate-fade-in">
+            <span>{toastNotice}</span>
+            <button
+              onClick={() => setToastNotice(null)}
+              className="px-2 py-0.5 bg-white/20 hover:bg-white/30 rounded text-xs font-semibold"
+            >
+              關閉
+            </button>
+          </div>
+        )}
         
         {/* Tab 1: Classrooms List & Floor Filters */}
         {activeTab === 'classrooms' && (
@@ -336,6 +389,7 @@ export function App() {
                   onOpenReport={c => setEditingClassroom(c)}
                   onToggleCompleted={handleToggleCompleted}
                   onOpenCoordinate={() => setActiveTab('coordinator')}
+                  onOpenDetail={c => setDetailClassroom(c)}
                 />
               ))}
             </div>
@@ -360,6 +414,16 @@ export function App() {
       </main>
 
       {/* Global Modals */}
+      {detailClassroom && (
+        <ClassDetailModal
+          classroom={detailClassroom}
+          isOpen={Boolean(detailClassroom)}
+          onClose={() => setDetailClassroom(null)}
+          onOpenReport={c => setEditingClassroom(c)}
+          onOpenCoordinate={() => setActiveTab('coordinator')}
+        />
+      )}
+
       {editingClassroom && (
         <ReportModal
           classroom={editingClassroom}
@@ -387,6 +451,15 @@ export function App() {
         />
       )}
 
+      {/* Password Authentication Modal */}
+      <PasswordAuthModal
+        isOpen={passwordModalConfig.isOpen}
+        title={passwordModalConfig.title}
+        description={passwordModalConfig.description}
+        onClose={() => setPasswordModalConfig(prev => ({ ...prev, isOpen: false }))}
+        onSuccess={passwordModalConfig.onSuccess}
+      />
+
       {/* System Footer */}
       <footer className="bg-slate-900 text-slate-400 border-t border-slate-800 py-6 text-xs mt-12">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col md:flex-row items-center justify-between gap-4">
@@ -397,6 +470,13 @@ export function App() {
           <div className="flex items-center gap-4 text-slate-400">
             <span>支援 115 學年度桌椅清點作業</span>
             <span>•</span>
+            <button
+              onClick={() => setActiveTab('exporter')}
+              className="text-indigo-400 hover:underline flex items-center gap-1"
+            >
+              <FileText className="w-3 h-3" />
+              <span>匯出至 Google Doc 文件</span>
+            </button>
           </div>
         </div>
       </footer>

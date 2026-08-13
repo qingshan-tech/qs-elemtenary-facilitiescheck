@@ -60,12 +60,13 @@ export const SurplusCoordinator: React.FC<Props> = ({
     return status.deskDifference > 0 || status.chairDifference > 0;
   });
 
-  // Compute classrooms needing items
+  // Compute classrooms needing items (including shortage or model exchange needs)
   const shortageClasses = classrooms.filter(c => {
     if (!c.reported) return false;
     if (filterFloor !== 'ALL' && c.floor !== filterFloor) return false;
     const status = calculateInventoryStatus(c);
-    return status.deskDifference < 0 || status.chairDifference < 0;
+    const hasExchange = Boolean(c.exchangeNeed?.hasNeed);
+    return status.deskDifference < 0 || status.chairDifference < 0 || hasExchange;
   });
 
   // Available models for selected source class
@@ -392,6 +393,7 @@ export const SurplusCoordinator: React.FC<Props> = ({
             <div className="space-y-3">
               {shortageClasses.map(c => {
                 const st = calculateInventoryStatus(c);
+                const ex = c.exchangeNeed;
                 return (
                   <div key={c.id} className="p-3 bg-rose-50/50 border border-rose-200/80 rounded-xl text-xs space-y-2">
                     <div className="flex justify-between items-center font-bold text-slate-900">
@@ -415,11 +417,22 @@ export const SurplusCoordinator: React.FC<Props> = ({
                           缺椅子 {Math.abs(st.chairDifference)} 張
                         </span>
                       )}
+                      {ex?.hasNeed && (
+                        <span className="px-2 py-0.5 bg-amber-600 text-white font-bold rounded">
+                          🏷️ 欲換型號: {ex.deskExchangeNeeded ? `桌${ex.targetDeskModel}x${ex.targetDeskQuantity} ` : ''}{ex.chairExchangeNeeded ? `椅${ex.targetChairModel}x${ex.targetChairQuantity}` : ''}
+                        </span>
+                      )}
                     </div>
+
+                    {ex?.reason && (
+                      <p className="text-amber-900 font-medium text-[11px] bg-amber-100/80 p-1.5 rounded border border-amber-200">
+                        <strong>調配說明：</strong>{ex.reason}
+                      </p>
+                    )}
 
                     {c.note && (
                       <p className="text-slate-600 text-[11px] bg-white/80 p-1.5 rounded border border-rose-100">
-                        {c.note}
+                        <strong>備註：</strong>{c.note}
                       </p>
                     )}
                   </div>

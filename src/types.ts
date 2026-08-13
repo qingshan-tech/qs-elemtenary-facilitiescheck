@@ -25,6 +25,17 @@ export interface ChairEntry {
   quantity: number;
 }
 
+export interface ExchangeNeed {
+  hasNeed: boolean;             // 是否有換型號/調配需求
+  deskExchangeNeeded?: boolean; // 桌子是否需要換型號
+  targetDeskModel?: string;     // 想更換成的桌子型號
+  targetDeskQuantity?: number;  // 想更換成的桌子張數
+  chairExchangeNeeded?: boolean;// 椅子是否需要換型號
+  targetChairModel?: string;    // 想更換成的椅子型號
+  targetChairQuantity?: number; // 想更換成的椅子張數
+  reason?: string;              // 換型號/調配原因說明
+}
+
 export interface Classroom {
   id: string;            // e.g. "101"
   name: string;          // e.g. "101導師"
@@ -38,6 +49,7 @@ export interface Classroom {
   reported: boolean;     // 是否已填報
   isCompleted: boolean;  // 總務處/班級標記搬運補齊已完成
   note?: string;         // 備註說明
+  exchangeNeed?: ExchangeNeed; // 換型號/調配需求細節
   lastUpdated?: string;
 }
 
@@ -54,6 +66,13 @@ export interface TransferLog {
   timestamp: string;
 }
 
+export interface ModelBreakdown {
+  model: string;
+  quantity: number;
+  used: number;
+  surplus: number;
+}
+
 export interface InventoryStatus {
   totalDesks: number;
   totalChairs: number;
@@ -61,4 +80,6 @@ export interface InventoryStatus {
   chairDifference: number; // current - needed (positive = surplus, negative = shortage)
   deskTag: string; // e.g., "桌子數量正確", "需要桌子 2 張", "有多桌子 3 張"
   chairTag: string; // e.g., "椅子數量正確", "需要椅子 1 張", "有多椅子 2 張"
+  deskModelBreakdown?: ModelBreakdown[];
+  chairModelBreakdown?: ModelBreakdown[];
 }

@@ -34,7 +34,7 @@ export const INITIAL_CLASSROOMS: Classroom[] = [
   {
     id: '101',
     name: '101導師',
-    titleExtra: '(學年主任)',
+    titleExtra: '',
     teacher: '馬欣吟',
     floor: '1F',
     extension: '812',
@@ -96,7 +96,7 @@ export const INITIAL_CLASSROOMS: Classroom[] = [
   {
     id: '202',
     name: '202導師',
-    titleExtra: '(學年主任)',
+    titleExtra: '',
     teacher: '周心心',
     floor: '2F',
     extension: '823',
@@ -143,7 +143,7 @@ export const INITIAL_CLASSROOMS: Classroom[] = [
   {
     id: '302',
     name: '302導師',
-    titleExtra: '(學年主任)',
+    titleExtra: '',
     teacher: '蔡惠如',
     floor: '3F',
     extension: '833',
@@ -205,7 +205,7 @@ export const INITIAL_CLASSROOMS: Classroom[] = [
   {
     id: '402',
     name: '402導師',
-    titleExtra: '(學年主任)',
+    titleExtra: '',
     teacher: '魏竹君',
     floor: '4F',
     extension: '843',
@@ -235,7 +235,7 @@ export const INITIAL_CLASSROOMS: Classroom[] = [
   {
     id: '602',
     name: '602導師',
-    titleExtra: '(學年主任)',
+    titleExtra: '',
     teacher: '陳安柔',
     floor: '4F',
     extension: '841',
@@ -252,7 +252,7 @@ export const INITIAL_CLASSROOMS: Classroom[] = [
   {
     id: '501',
     name: '501導師',
-    titleExtra: '(學年主任)',
+    titleExtra: '',
     teacher: '王怡君',
     floor: '5F',
     extension: '852',
@@ -330,6 +330,34 @@ export function calculateInventoryStatus(classroom: Classroom): InventoryStatus 
   const deskDifference = totalDesks - classroom.studentCount;
   const chairDifference = totalChairs - classroom.studentCount;
 
+  // 計算每一型號桌子的使用量與多餘量
+  let remainingDeskDemand = classroom.studentCount;
+  const deskModelBreakdown = classroom.deskEntries.map(d => {
+    const used = Math.min(d.quantity, remainingDeskDemand);
+    remainingDeskDemand = Math.max(0, remainingDeskDemand - used);
+    const surplus = d.quantity - used;
+    return {
+      model: d.model,
+      quantity: d.quantity,
+      used,
+      surplus
+    };
+  });
+
+  // 計算每一型號椅子的使用量與多餘量
+  let remainingChairDemand = classroom.studentCount;
+  const chairModelBreakdown = classroom.chairEntries.map(c => {
+    const used = Math.min(c.quantity, remainingChairDemand);
+    remainingChairDemand = Math.max(0, remainingChairDemand - used);
+    const surplus = c.quantity - used;
+    return {
+      model: c.model,
+      quantity: c.quantity,
+      used,
+      surplus
+    };
+  });
+
   let deskTag = '桌子數量正確';
   if (deskDifference < 0) {
     deskTag = `需要桌子 ${Math.abs(deskDifference)} 張`;
@@ -350,7 +378,9 @@ export function calculateInventoryStatus(classroom: Classroom): InventoryStatus 
     deskDifference,
     chairDifference,
     deskTag,
-    chairTag
+    chairTag,
+    deskModelBreakdown,
+    chairModelBreakdown
   };
 }
 

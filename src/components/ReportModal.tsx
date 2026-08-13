@@ -35,6 +35,16 @@ export const ReportModal: React.FC<Props> = ({
   const [chairEntries, setChairEntries] = useState<ChairEntry[]>([]);
   const [note, setNote] = useState<string>('');
 
+  // Exchange Need states
+  const [hasExchangeNeed, setHasExchangeNeed] = useState<boolean>(classroom.exchangeNeed?.hasNeed || false);
+  const [deskExchangeNeeded, setDeskExchangeNeeded] = useState<boolean>(classroom.exchangeNeed?.deskExchangeNeeded ?? true);
+  const [targetDeskModel, setTargetDeskModel] = useState<string>(classroom.exchangeNeed?.targetDeskModel || '#130');
+  const [targetDeskQuantity, setTargetDeskQuantity] = useState<number>(classroom.exchangeNeed?.targetDeskQuantity || 1);
+  const [chairExchangeNeeded, setChairExchangeNeeded] = useState<boolean>(classroom.exchangeNeed?.chairExchangeNeeded ?? true);
+  const [targetChairModel, setTargetChairModel] = useState<string>(classroom.exchangeNeed?.targetChairModel || '#125-#135');
+  const [targetChairQuantity, setTargetChairQuantity] = useState<number>(classroom.exchangeNeed?.targetChairQuantity || 1);
+  const [exchangeReason, setExchangeReason] = useState<string>(classroom.exchangeNeed?.reason || '');
+
   useEffect(() => {
     if (classroom) {
       setStudentCount(classroom.studentCount);
@@ -50,6 +60,15 @@ export const ReportModal: React.FC<Props> = ({
           : [{ model: '#125-#135', quantity: classroom.studentCount || 0 }]
       );
       setNote(classroom.note || '');
+
+      setHasExchangeNeed(classroom.exchangeNeed?.hasNeed || false);
+      setDeskExchangeNeeded(classroom.exchangeNeed?.deskExchangeNeeded ?? true);
+      setTargetDeskModel(classroom.exchangeNeed?.targetDeskModel || '#130');
+      setTargetDeskQuantity(classroom.exchangeNeed?.targetDeskQuantity || 1);
+      setChairExchangeNeeded(classroom.exchangeNeed?.chairExchangeNeeded ?? true);
+      setTargetChairModel(classroom.exchangeNeed?.targetChairModel || '#125-#135');
+      setTargetChairQuantity(classroom.exchangeNeed?.targetChairQuantity || 1);
+      setExchangeReason(classroom.exchangeNeed?.reason || '');
     }
   }, [classroom]);
 
@@ -117,6 +136,16 @@ export const ReportModal: React.FC<Props> = ({
       chairEntries: chairEntries.filter(c => c.quantity > 0),
       reported: true,
       note,
+      exchangeNeed: {
+        hasNeed: hasExchangeNeed,
+        deskExchangeNeeded,
+        targetDeskModel,
+        targetDeskQuantity,
+        chairExchangeNeeded,
+        targetChairModel,
+        targetChairQuantity,
+        reason: exchangeReason
+      },
       lastUpdated: nowStr
     };
 
@@ -352,6 +381,155 @@ export const ReportModal: React.FC<Props> = ({
                 )}
               </div>
             </div>
+          </div>
+
+          {/* Model Exchange Need Section (Independent of Student Count) */}
+          <div className="p-4 bg-amber-50/80 border border-amber-200/90 rounded-xl space-y-3">
+            <div className="flex items-center justify-between">
+              <div>
+                <h3 className="font-bold text-amber-950 text-sm flex items-center gap-1.5">
+                  <span className="p-1 bg-amber-200 text-amber-900 rounded-md text-xs">🔄</span>
+                  桌椅型號正確性與更換/調配需求
+                </h3>
+                <p className="text-xs text-amber-800 mt-0.5">
+                  即便數量符合學生人數，若現有桌椅型號不適合或需更換，可於此登記
+                </p>
+              </div>
+            </div>
+
+            {/* Toggle Status Buttons */}
+            <div className="grid grid-cols-2 gap-2 pt-1">
+              <button
+                type="button"
+                onClick={() => setHasExchangeNeed(false)}
+                className={`px-3 py-2 rounded-xl text-xs font-bold border transition-all flex items-center justify-center gap-1.5 ${
+                  !hasExchangeNeed
+                    ? 'bg-emerald-600 text-white border-emerald-700 shadow-2xs'
+                    : 'bg-white text-slate-700 border-slate-300 hover:bg-slate-50'
+                }`}
+              >
+                <span>🟢 型號皆正確 (無調配需求)</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setHasExchangeNeed(true)}
+                className={`px-3 py-2 rounded-xl text-xs font-bold border transition-all flex items-center justify-center gap-1.5 ${
+                  hasExchangeNeed
+                    ? 'bg-amber-600 text-white border-amber-700 shadow-2xs ring-2 ring-amber-300'
+                    : 'bg-white text-slate-700 border-slate-300 hover:bg-slate-50'
+                }`}
+              >
+                <span>🏷️ 需要換型號 / 有調配需求</span>
+              </button>
+            </div>
+
+            {/* Detailed Exchange Controls */}
+            {hasExchangeNeed && (
+              <div className="p-3 bg-white/90 border border-amber-200 rounded-xl space-y-3 mt-2 animate-fade-in text-xs">
+                <p className="font-bold text-amber-900 text-xs border-b border-amber-100 pb-1.5">
+                  請選擇欲更換的型號與張數：
+                </p>
+
+                {/* Desk Exchange Need */}
+                <div className="p-2.5 bg-slate-50 rounded-lg border border-slate-200 space-y-2">
+                  <div className="flex items-center justify-between">
+                    <label className="flex items-center gap-2 font-bold text-slate-800 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={deskExchangeNeeded}
+                        onChange={e => setDeskExchangeNeeded(e.target.checked)}
+                        className="w-4 h-4 text-amber-600 rounded border-slate-300 focus:ring-amber-500"
+                      />
+                      <span>🪑 需要更換【桌子】型號</span>
+                    </label>
+                  </div>
+
+                  {deskExchangeNeeded && (
+                    <div className="flex flex-wrap items-center gap-2 pt-1 pl-6">
+                      <span className="text-slate-600">希望換成型號：</span>
+                      <select
+                        value={targetDeskModel}
+                        onChange={e => setTargetDeskModel(e.target.value)}
+                        className="px-2.5 py-1 bg-white border border-slate-300 rounded-lg text-xs font-mono text-slate-900 font-bold focus:ring-2 focus:ring-amber-500"
+                      >
+                        {DESK_SPECS.map(s => (
+                          <option key={s.model} value={s.model}>
+                            型號 {s.model} ({s.colorName}柱)
+                          </option>
+                        ))}
+                      </select>
+                      <span className="text-slate-600">數量：</span>
+                      <input
+                        type="number"
+                        min={1}
+                        max={60}
+                        value={targetDeskQuantity}
+                        onChange={e => setTargetDeskQuantity(Math.max(1, parseInt(e.target.value, 10) || 1))}
+                        className="w-16 px-2 py-1 bg-white border border-slate-300 rounded-lg text-center font-mono font-bold text-slate-900"
+                      />
+                      <span className="text-slate-600">張</span>
+                    </div>
+                  )}
+                </div>
+
+                {/* Chair Exchange Need */}
+                <div className="p-2.5 bg-slate-50 rounded-lg border border-slate-200 space-y-2">
+                  <div className="flex items-center justify-between">
+                    <label className="flex items-center gap-2 font-bold text-slate-800 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={chairExchangeNeeded}
+                        onChange={e => setChairExchangeNeeded(e.target.checked)}
+                        className="w-4 h-4 text-amber-600 rounded border-slate-300 focus:ring-amber-500"
+                      />
+                      <span>𒒺 需要更換【椅子】型號</span>
+                    </label>
+                  </div>
+
+                  {chairExchangeNeeded && (
+                    <div className="flex flex-wrap items-center gap-2 pt-1 pl-6">
+                      <span className="text-slate-600">希望換成型號：</span>
+                      <select
+                        value={targetChairModel}
+                        onChange={e => setTargetChairModel(e.target.value)}
+                        className="px-2.5 py-1 bg-white border border-slate-300 rounded-lg text-xs font-mono text-slate-900 font-bold focus:ring-2 focus:ring-amber-500"
+                      >
+                        {CHAIR_SPECS.map(s => (
+                          <option key={s.model} value={s.model}>
+                            型號 {s.model}
+                          </option>
+                        ))}
+                      </select>
+                      <span className="text-slate-600">數量：</span>
+                      <input
+                        type="number"
+                        min={1}
+                        max={60}
+                        value={targetChairQuantity}
+                        onChange={e => setTargetChairQuantity(Math.max(1, parseInt(e.target.value, 10) || 1))}
+                        className="w-16 px-2 py-1 bg-white border border-slate-300 rounded-lg text-center font-mono font-bold text-slate-900"
+                      />
+                      <span className="text-slate-600">張</span>
+                    </div>
+                  )}
+                </div>
+
+                {/* Exchange Reason */}
+                <div>
+                  <label className="block text-slate-700 font-semibold mb-1">
+                    調配/更換原因說明：
+                  </label>
+                  <input
+                    type="text"
+                    value={exchangeReason}
+                    onChange={e => setExchangeReason(e.target.value)}
+                    placeholder="例如：學生身材較高大需更換較高號桌椅，或現有桌椅毀損"
+                    className="w-full px-3 py-1.5 bg-white border border-slate-300 rounded-lg text-xs text-slate-900 focus:ring-2 focus:ring-amber-500"
+                  />
+                </div>
+              </div>
+            )}
           </div>
 
           {/* Teacher Note Textarea */}

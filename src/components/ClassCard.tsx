@@ -11,7 +11,8 @@ import {
   CheckSquare,
   Square,
   ArrowRightLeft,
-  Sparkles
+  Sparkles,
+  Info
 } from 'lucide-react';
 
 interface Props {
@@ -19,13 +20,15 @@ interface Props {
   onOpenReport: (classroom: Classroom) => void;
   onToggleCompleted: (classId: string) => void;
   onOpenCoordinate?: (classroom: Classroom) => void;
+  onOpenDetail?: (classroom: Classroom) => void;
 }
 
 export const ClassCard: React.FC<Props> = ({
   classroom,
   onOpenReport,
   onToggleCompleted,
-  onOpenCoordinate
+  onOpenCoordinate,
+  onOpenDetail
 }) => {
   const status = calculateInventoryStatus(classroom);
 
@@ -35,11 +38,15 @@ export const ClassCard: React.FC<Props> = ({
     return spec ? spec.hexColor : '#CBD5E1';
   };
 
+  const hasExchangeNeed = Boolean(classroom.exchangeNeed?.hasNeed);
+
   return (
     <div
       className={`bg-white rounded-2xl border transition-all duration-200 shadow-xs hover:shadow-md flex flex-col justify-between overflow-hidden relative ${
         classroom.isCompleted
           ? 'border-emerald-300 ring-1 ring-emerald-200/60 bg-emerald-50/20'
+          : hasExchangeNeed
+          ? 'border-amber-300 ring-1 ring-amber-200 bg-amber-50/10'
           : classroom.reported
           ? 'border-slate-200 hover:border-indigo-300'
           : 'border-amber-200 bg-amber-50/20'
@@ -90,6 +97,18 @@ export const ClassCard: React.FC<Props> = ({
         {/* Status Tags Section */}
         <div className="px-4 py-3 bg-slate-50/70 border-b border-slate-100 flex flex-wrap gap-1.5 items-center">
           
+          {/* Exchange Need Badge (🏷️ 有調配需求) */}
+          {hasExchangeNeed && (
+            <span
+              onClick={() => onOpenDetail && onOpenDetail(classroom)}
+              className="px-2.5 py-1 text-xs font-extrabold bg-amber-600 hover:bg-amber-700 text-white rounded-lg flex items-center gap-1 shadow-2xs cursor-pointer border border-amber-700 transition-colors"
+              title="點擊點開細節查看老師填寫的換型號需求"
+            >
+              <ArrowRightLeft className="w-3.5 h-3.5 text-amber-200 shrink-0" />
+              🏷️ 有調配需求 (需換型號)
+            </span>
+          )}
+
           {/* Reported Status Tag */}
           {!classroom.reported ? (
             <span className="px-2.5 py-1 text-xs font-bold bg-amber-100 text-amber-800 rounded-lg flex items-center gap-1 border border-amber-200">
@@ -150,28 +169,122 @@ export const ClassCard: React.FC<Props> = ({
         {/* Detailed Inventory Breakdown */}
         <div className="p-4 space-y-3 text-xs">
           
+          {/* Model Surplus / Deficit Highlight Box */}
+          {classroom.reported && (status.deskDifference !== 0 || status.chairDifference !== 0) && (
+            <div className="p-2.5 bg-indigo-50/80 border border-indigo-200/80 rounded-xl space-y-1.5 text-xs">
+              <div className="flex items-center justify-between font-bold text-slate-900 text-[11px]">
+                <span className="flex items-center gap-1 text-indigo-900">
+                  <Sparkles className="w-3.5 h-3.5 text-indigo-600" />
+                  型號多缺狀態 (多/少明細)
+                </span>
+                <span className="text-[10px] text-slate-500 font-mono font-normal">
+                  需求各 {classroom.studentCount} 張
+                </span>
+              </div>
+
+              {/* Desk Surplus/Deficit summary */}
+              <div className="flex flex-wrap items-center gap-1 text-[11px]">
+                <span className="font-semibold text-slate-700">🪑 桌子：</span>
+                {status.deskDifference === 0 ? (
+                  <span className="text-emerald-700 font-medium">數量符合</span>
+                ) : status.deskDifference > 0 ? (
+                  <span className="inline-flex flex-wrap items-center gap-1">
+                    {status.deskModelBreakdown
+                      ?.filter(b => b.surplus > 0)
+                      .map((b, idx) => (
+                        <span key={idx} className="inline-flex items-center gap-1 px-1.5 py-0.5 bg-blue-600 text-white rounded font-bold text-[10px] shadow-2xs">
+                          <span>型號 {b.model}</span>
+                          <span className="bg-white/20 px-1 rounded">有多 {b.surplus} 張</span>
+                        </span>
+                      ))}
+                  </span>
+                ) : (
+                  <span className="inline-flex items-center gap-1 px-1.5 py-0.5 bg-rose-600 text-white rounded font-bold text-[10px] shadow-2xs">
+                    <span>缺少 {Math.abs(status.deskDifference)} 張桌子</span>
+                    {classroom.deskEntries.length > 0 && (
+                      <span className="text-rose-100 font-normal">
+                        (現有型號 {classroom.deskEntries.map(d => d.model).join(', ')})
+                      </span>
+                    )}
+                  </span>
+                )}
+              </div>
+
+              {/* Chair Surplus/Deficit summary */}
+              <div className="flex flex-wrap items-center gap-1 text-[11px]">
+                <span className="font-semibold text-slate-700">𒒺 椅子：</span>
+                {status.chairDifference === 0 ? (
+                  <span className="text-emerald-700 font-medium">數量符合</span>
+                ) : status.chairDifference > 0 ? (
+                  <span className="inline-flex flex-wrap items-center gap-1">
+                    {status.chairModelBreakdown
+                      ?.filter(b => b.surplus > 0)
+                      .map((b, idx) => (
+                        <span key={idx} className="inline-flex items-center gap-1 px-1.5 py-0.5 bg-blue-600 text-white rounded font-bold text-[10px] shadow-2xs">
+                          <span>型號 {b.model}</span>
+                          <span className="bg-white/20 px-1 rounded">有多 {b.surplus} 張</span>
+                        </span>
+                      ))}
+                  </span>
+                ) : (
+                  <span className="inline-flex items-center gap-1 px-1.5 py-0.5 bg-rose-600 text-white rounded font-bold text-[10px] shadow-2xs">
+                    <span>缺少 {Math.abs(status.chairDifference)} 張椅子</span>
+                    {classroom.chairEntries.length > 0 && (
+                      <span className="text-rose-100 font-normal">
+                        (現有型號 {classroom.chairEntries.map(c => c.model).join(', ')})
+                      </span>
+                    )}
+                  </span>
+                )}
+              </div>
+            </div>
+          )}
+
           {/* Desk inventory */}
           <div>
             <div className="text-slate-500 font-semibold mb-1 flex justify-between items-center">
               <span>🪑 桌子總計：<strong className="text-slate-900 font-mono">{status.totalDesks} 張</strong> (需求 {classroom.studentCount} 張)</span>
+              {status.deskDifference < 0 && (
+                <span className="text-rose-600 font-bold text-[11px] bg-rose-50 px-1.5 py-0.5 rounded border border-rose-200">
+                  缺 {Math.abs(status.deskDifference)} 張
+                </span>
+              )}
+              {status.deskDifference > 0 && (
+                <span className="text-blue-700 font-bold text-[11px] bg-blue-50 px-1.5 py-0.5 rounded border border-blue-200">
+                  多 {status.deskDifference} 張
+                </span>
+              )}
             </div>
             {classroom.deskEntries.length === 0 ? (
               <p className="text-slate-400 italic text-[11px]">尚無桌子型號紀錄</p>
             ) : (
               <div className="flex flex-wrap gap-1.5 mt-1">
-                {classroom.deskEntries.map((d, i) => (
-                  <span
-                    key={i}
-                    className="inline-flex items-center gap-1.5 px-2 py-1 bg-slate-100 border border-slate-200 rounded-md text-slate-800 font-medium"
-                  >
+                {classroom.deskEntries.map((d, i) => {
+                  const breakdown = status.deskModelBreakdown?.find(b => b.model === d.model);
+                  const surplusCount = breakdown ? breakdown.surplus : 0;
+                  return (
                     <span
-                      className="w-2.5 h-2.5 rounded-full border border-slate-400 shrink-0"
-                      style={{ backgroundColor: getDeskColor(d.model) }}
-                    />
-                    <span className="font-mono">{d.model}</span>
-                    <span className="font-bold text-indigo-700">x{d.quantity}</span>
-                  </span>
-                ))}
+                      key={i}
+                      className={`inline-flex items-center gap-1.5 px-2 py-1 rounded-md text-slate-800 font-medium border ${
+                        surplusCount > 0
+                          ? 'bg-blue-50/90 border-blue-200 text-blue-950'
+                          : 'bg-slate-100 border-slate-200'
+                      }`}
+                    >
+                      <span
+                        className="w-2.5 h-2.5 rounded-full border border-slate-400 shrink-0"
+                        style={{ backgroundColor: getDeskColor(d.model) }}
+                      />
+                      <span className="font-mono">{d.model}</span>
+                      <span className="font-bold text-indigo-700">x{d.quantity}</span>
+                      {surplusCount > 0 && (
+                        <span className="px-1.5 py-0.5 bg-blue-600 text-white text-[10px] font-bold rounded shadow-2xs">
+                          有多 {surplusCount} 張
+                        </span>
+                      )}
+                    </span>
+                  );
+                })}
               </div>
             )}
           </div>
@@ -180,20 +293,43 @@ export const ClassCard: React.FC<Props> = ({
           <div>
             <div className="text-slate-500 font-semibold mb-1 flex justify-between items-center">
               <span>💺 椅子總計：<strong className="text-slate-900 font-mono">{status.totalChairs} 張</strong> (需求 {classroom.studentCount} 張)</span>
+              {status.chairDifference < 0 && (
+                <span className="text-rose-600 font-bold text-[11px] bg-rose-50 px-1.5 py-0.5 rounded border border-rose-200">
+                  缺 {Math.abs(status.chairDifference)} 張
+                </span>
+              )}
+              {status.chairDifference > 0 && (
+                <span className="text-blue-700 font-bold text-[11px] bg-blue-50 px-1.5 py-0.5 rounded border border-blue-200">
+                  多 {status.chairDifference} 張
+                </span>
+              )}
             </div>
             {classroom.chairEntries.length === 0 ? (
               <p className="text-slate-400 italic text-[11px]">尚無椅子型號紀錄</p>
             ) : (
               <div className="flex flex-wrap gap-1.5 mt-1">
-                {classroom.chairEntries.map((c, i) => (
-                  <span
-                    key={i}
-                    className="inline-flex items-center gap-1 px-2 py-1 bg-slate-100 border border-slate-200 rounded-md text-slate-800 font-medium"
-                  >
-                    <span className="font-mono text-slate-700">{c.model}</span>
-                    <span className="font-bold text-indigo-700">x{c.quantity}</span>
-                  </span>
-                ))}
+                {classroom.chairEntries.map((c, i) => {
+                  const breakdown = status.chairModelBreakdown?.find(b => b.model === c.model);
+                  const surplusCount = breakdown ? breakdown.surplus : 0;
+                  return (
+                    <span
+                      key={i}
+                      className={`inline-flex items-center gap-1 px-2 py-1 rounded-md text-slate-800 font-medium border ${
+                        surplusCount > 0
+                          ? 'bg-blue-50/90 border-blue-200 text-blue-950'
+                          : 'bg-slate-100 border-slate-200'
+                      }`}
+                    >
+                      <span className="font-mono text-slate-700">{c.model}</span>
+                      <span className="font-bold text-indigo-700">x{c.quantity}</span>
+                      {surplusCount > 0 && (
+                        <span className="px-1.5 py-0.5 bg-blue-600 text-white text-[10px] font-bold rounded shadow-2xs">
+                          有多 {surplusCount} 張
+                        </span>
+                      )}
+                    </span>
+                  );
+                })}
               </div>
             )}
           </div>
@@ -235,6 +371,18 @@ export const ClassCard: React.FC<Props> = ({
         </button>
 
         <div className="flex items-center gap-1.5">
+          {/* Detail Button */}
+          {onOpenDetail && (
+            <button
+              onClick={() => onOpenDetail(classroom)}
+              className="px-2.5 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-xs font-semibold transition-colors flex items-center gap-1 border border-slate-300"
+              title="點開檢視詳細清點資料與導師填寫的換型號需求"
+            >
+              <Info className="w-3.5 h-3.5 text-slate-500" />
+              <span>細節</span>
+            </button>
+          )}
+
           {/* Match / Transfer Button if there is shortage or surplus */}
           {onOpenCoordinate && (status.deskDifference !== 0 || status.chairDifference !== 0) && (
             <button
