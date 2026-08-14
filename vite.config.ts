@@ -10,6 +10,7 @@ export default defineConfig(() => {
       alias: {
         '@': path.resolve(__dirname, '.'),
       },
+    base: '/qs-elemtenary-facilitiescheck/',
     },
     server: {
       // HMR is disabled in AI Studio via DISABLE_HMR env var.
