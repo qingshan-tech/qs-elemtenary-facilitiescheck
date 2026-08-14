@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
-import { Classroom } from '../types';
+import { Classroom, TransferLog } from '../types';
 import { calculateInventoryStatus, DESK_SPECS } from '../data/initialData';
+import { transformClassroomToSheetRow, ClassroomSheetRow } from '../utils/sheetUtils';
 import {
   FileText,
   Table,
@@ -11,15 +12,20 @@ import {
   FileSpreadsheet,
   Printer,
   Sparkles,
-  Info
+  Info,
+  Truck,
+  ArrowRightLeft,
+  Layers,
+  AlertCircle
 } from 'lucide-react';
 
 interface Props {
   classrooms: Classroom[];
+  transferLogs?: TransferLog[];
 }
 
-export const GoogleDocSheetExporter: React.FC<Props> = ({ classrooms }) => {
-  const [activeFormat, setActiveFormat] = useState<'doc' | 'sheet'>('doc');
+export const GoogleDocSheetExporter: React.FC<Props> = ({ classrooms, transferLogs = [] }) => {
+  const [activeFormat, setActiveFormat] = useState<'doc' | 'sheet'>('sheet');
   const [copiedDoc, setCopiedDoc] = useState(false);
   const [copiedSheet, setCopiedSheet] = useState(false);
 
@@ -44,6 +50,9 @@ export const GoogleDocSheetExporter: React.FC<Props> = ({ classrooms }) => {
     }
   });
 
+  // Transform all classrooms into structured 21-column sheet rows
+  const sheetRows: ClassroomSheetRow[] = classrooms.map(c => transformClassroomToSheetRow(c));
+
   // Generate HTML for Google Doc / Clipboard
   const generateDocHTML = () => {
     const today = new Date().toLocaleDateString('zh-TW', {
@@ -57,32 +66,30 @@ export const GoogleDocSheetExporter: React.FC<Props> = ({ classrooms }) => {
 <html>
 <head>
 <meta charset="utf-8">
-<title>青山國小115學年度班級教室桌椅型號清點與需求調查表</title>
+<title>青山國小115學年度班級教室桌椅型號清點與搬運調配統計總表</title>
 <style>
-  body { font-family: 'PMingLiU', 'Microsoft JhengHei', sans-serif; line-height: 1.6; color: #1e293b; padding: 20px; }
-  h1 { font-size: 22px; text-align: center; color: #0f172a; margin-bottom: 4px; }
-  h2 { font-size: 16px; text-align: center; color: #334155; margin-top: 0; font-weight: normal; }
+  body { font-family: 'Microsoft JhengHei', 'PMingLiU', sans-serif; line-height: 1.6; color: #1e293b; padding: 20px; font-size: 12px; }
+  h1 { font-size: 20px; text-align: center; color: #0f172a; margin-bottom: 4px; }
+  h2 { font-size: 15px; text-align: center; color: #334155; margin-top: 0; font-weight: normal; }
   .meta-box { background-color: #f8fafc; border: 1px solid #cbd5e1; padding: 12px; margin: 16px 0; border-radius: 6px; }
-  .summary-table { width: 100%; border-collapse: collapse; margin-bottom: 20px; font-size: 13px; }
-  .summary-table th, .summary-table td { border: 1px solid #94a3b8; padding: 8px 10px; text-align: center; }
-  .summary-table th { background-color: #e2e8f0; font-weight: bold; }
-  .main-table { width: 100%; border-collapse: collapse; font-size: 12px; }
-  .main-table th, .main-table td { border: 1px solid #64748b; padding: 6px 8px; text-align: left; }
-  .main-table th { background-color: #1e293b; color: #ffffff; text-align: center; }
-  .tag-ok { background-color: #d1fae5; color: #065f46; padding: 2px 6px; border-radius: 4px; font-weight: bold; font-size: 11px; }
-  .tag-[need] { background-color: #ffe4e6; color: #9f1239; padding: 2px 6px; border-radius: 4px; font-weight: bold; font-size: 11px; }
-  .tag-surplus { background-color: #dbeafe; color: #1e40af; padding: 2px 6px; border-radius: 4px; font-weight: bold; font-size: 11px; }
-  .tag-[unreported] { background-color: #fef3c7; color: #92400e; padding: 2px 6px; border-radius: 4px; font-size: 11px; }
-  .footer { margin-top: 24px; font-size: 12px; color: #64748b; text-align: right; }
+  .main-table { width: 100%; border-collapse: collapse; font-size: 11px; margin-bottom: 20px; }
+  .main-table th, .main-table td { border: 1px solid #64748b; padding: 6px 6px; }
+  .main-table th { background-color: #0f172a; color: #ffffff; text-align: center; font-weight: bold; }
+  .tag-ok { background-color: #d1fae5; color: #065f46; padding: 2px 4px; border-radius: 3px; font-weight: bold; font-size: 10px; }
+  .tag-need { background-color: #ffe4e6; color: #9f1239; padding: 2px 4px; border-radius: 3px; font-weight: bold; font-size: 10px; }
+  .tag-surplus { background-color: #dbeafe; color: #1e40af; padding: 2px 4px; border-radius: 3px; font-weight: bold; font-size: 10px; }
+  .tag-unreported { background-color: #fef3c7; color: #92400e; padding: 2px 4px; border-radius: 3px; font-size: 10px; }
+  .tag-exchange { background-color: #fef3c7; color: #b45309; padding: 2px 4px; border-radius: 3px; font-weight: bold; font-size: 10px; }
+  .footer { margin-top: 24px; font-size: 11px; color: #64748b; text-align: right; }
 </style>
 </head>
 <body>
 
 <h1>新北市立青山國民中小學 (國小部)</h1>
-<h2>115學年度 班級教室桌椅型號清點與需求調查統計總表</h2>
+<h2>115學年度 班級教室桌椅型號清點與搬運調配統計總表</h2>
 
 <div class="meta-box">
-  <table style="width: 100%; border: none; font-size: 13px;">
+  <table style="width: 100%; border: none; font-size: 12px;">
     <tr>
       <td><strong>清點統計日期：</strong>${today}</td>
       <td><strong>全校班級數：</strong>${classrooms.length} 班</td>
@@ -101,74 +108,83 @@ export const GoogleDocSheetExporter: React.FC<Props> = ({ classrooms }) => {
   </table>
 </div>
 
-<h3>【各班級桌椅型號與增減清點詳細統計表】</h3>
+<h3>【壹、各班級桌椅型號清點、數量審核與搬運調配總表】</h3>
 
 <table class="main-table">
   <thead>
     <tr>
-      <th style="width: 5%;">樓層</th>
-      <th style="width: 10%;">班級</th>
-      <th style="width: 10%;">導師/分機</th>
-      <th style="width: 6%;">學生</th>
-      <th style="width: 8%;">現有桌數</th>
-      <th style="width: 18%;">桌子型號及數量</th>
-      <th style="width: 8%;">現有椅數</th>
-      <th style="width: 15%;">椅子型號及數量</th>
-      <th style="width: 10%;">桌椅供需狀態</th>
-      <th style="width: 10%;">備註說明</th>
+      <th style="width: 4%;">樓層</th>
+      <th style="width: 7%;">班級</th>
+      <th style="width: 8%;">導師(分機)</th>
+      <th style="width: 4%;">學生</th>
+      <th style="width: 10%;">數量審核結果</th>
+      <th style="width: 5%;">現有桌數</th>
+      <th style="width: 5%;">桌差額</th>
+      <th style="width: 12%;">桌子型號及數量</th>
+      <th style="width: 5%;">現有椅數</th>
+      <th style="width: 5%;">椅差額</th>
+      <th style="width: 12%;">椅子型號及數量</th>
+      <th style="width: 13%;">換型號/調配需求</th>
+      <th style="width: 10%;">【搬運】調度配置</th>
     </tr>
   </thead>
   <tbody>
-    ${classrooms.map(c => {
-      if (!c.reported) {
-        return `
-          <tr>
-            <td style="text-align: center;">${c.floor}</td>
-            <td><strong>${c.name}</strong> ${c.titleExtra || ''}</td>
-            <td>${c.teacher} (${c.extension})</td>
-            <td style="text-align: center;">${c.studentCount}</td>
-            <td style="text-align: center; color: #94a3b8;">-</td>
-            <td style="color: #94a3b8;">尚未填報</td>
-            <td style="text-align: center; color: #94a3b8;">-</td>
-            <td style="color: #94a3b8;">尚未填報</td>
-            <td style="text-align: center;"><span class="tag-[unreported]">尚未填報</span></td>
-            <td>-</td>
-          </tr>
-        `;
-      }
-
-      const st = calculateInventoryStatus(c);
-      const deskListStr = c.deskEntries.map(d => `${d.model} (${d.quantity}張)`).join('、 ');
-      const chairListStr = c.chairEntries.map(ch => `${ch.model} (${ch.quantity}張)`).join('、 ');
-
-      let deskTagHTML = '<span class="tag-ok">桌數正確</span>';
-      if (st.deskDifference < 0) deskTagHTML = `<span class="tag-[need]">缺桌 ${Math.abs(st.deskDifference)}</span>`;
-      if (st.deskDifference > 0) deskTagHTML = `<span class="tag-surplus">多桌 ${st.deskDifference}</span>`;
-
-      let chairTagHTML = '<span class="tag-ok">椅數正確</span>';
-      if (st.chairDifference < 0) chairTagHTML += ` <span class="tag-[need]">缺椅 ${Math.abs(st.chairDifference)}</span>`;
-      if (st.chairDifference > 0) chairTagHTML += ` <span class="tag-surplus">多椅 ${st.chairDifference}</span>`;
-
-      return `
-        <tr>
-          <td style="text-align: center;">${c.floor}</td>
-          <td><strong>${c.name}</strong> ${c.titleExtra || ''}</td>
-          <td>${c.teacher} (${c.extension})</td>
-          <td style="text-align: center; font-weight: bold;">${c.studentCount}</td>
-          <td style="text-align: center;">${st.totalDesks}</td>
-          <td>${deskListStr}</td>
-          <td style="text-align: center;">${st.totalChairs}</td>
-          <td>${chairListStr}</td>
-          <td style="text-align: center;">${deskTagHTML}<br/>${chairTagHTML}</td>
-          <td>${c.note || '-'}</td>
-        </tr>
-      `;
-    }).join('')}
+    ${sheetRows.map(r => `
+      <tr>
+        <td style="text-align: center; font-weight: bold;">${r.floor}</td>
+        <td><strong>${r.name}</strong></td>
+        <td>${r.teacher} (${r.extension})</td>
+        <td style="text-align: center; font-weight: bold;">${r.studentCount}</td>
+        <td style="text-align: center;">${r.auditResult}</td>
+        <td style="text-align: center;">${r.totalDesks}</td>
+        <td style="text-align: center;">${r.deskDiffText}</td>
+        <td>${r.deskListText}</td>
+        <td style="text-align: center;">${r.totalChairs}</td>
+        <td style="text-align: center;">${r.chairDiffText}</td>
+        <td>${r.chairListText}</td>
+        <td>${r.exchangeNeedText}</td>
+        <td><strong>${r.logisticsPlanText}</strong></td>
+      </tr>
+    `).join('')}
   </tbody>
 </table>
 
+${transferLogs.length > 0 ? `
+<h3>【貳、課桌椅跨班調配與搬運派工明細清單】</h3>
+<table class="main-table">
+  <thead>
+    <tr style="background-color: #065f46;">
+      <th>派工單號</th>
+      <th>登記時間</th>
+      <th>調出班級 (來源)</th>
+      <th>調入班級 (需求)</th>
+      <th>搬運物品</th>
+      <th>型號</th>
+      <th>調配數量</th>
+      <th>執行狀態</th>
+      <th>調配備註說明</th>
+    </tr>
+  </thead>
+  <tbody>
+    ${transferLogs.map(l => `
+      <tr>
+        <td style="text-align: center;">${l.id}</td>
+        <td style="text-align: center;">${l.timestamp}</td>
+        <td>${l.fromClassName}</td>
+        <td>${l.toClassName}</td>
+        <td style="text-align: center;">${l.type === 'desk' ? '桌子' : '椅子'}</td>
+        <td style="text-align: center;">${l.model}</td>
+        <td style="text-align: center; font-weight: bold;">${l.quantity} 張</td>
+        <td style="text-align: center;">${l.status === 'completed' ? '<span class="tag-ok">已搬運完成</span>' : '<span class="tag-need">待搬運</span>'}</td>
+        <td>${l.note || '-'}</td>
+      </tr>
+    `).join('')}
+  </tbody>
+</table>
+` : ''}
+
 <div class="footer">
-  <p>青山國小總務處 謹製｜本檔案格式完全相容於 Google Docs 與 Microsoft Word</p>
+  <p>青山國小總務處 謹製｜本檔案格式相容於 Google Docs、Google Sheets 與 Microsoft Office</p>
 </div>
 
 </body>
@@ -176,72 +192,91 @@ export const GoogleDocSheetExporter: React.FC<Props> = ({ classrooms }) => {
     `;
   };
 
-  // Generate TSV / CSV for Google Sheet
+  // Generate CSV for Google Sheet / Excel (Full 21 Columns)
   const generateCSV = () => {
-    const title = ['【新北市立青山國民中小學 115學年度國小部班級教室桌椅清點與需求調查統計總表】'];
-    const headers = ['樓層', '班級名稱', '職稱/備註', '導師姓名', '分機', '學生人數', '桌子總數', '桌子型號及數量 (型號:數量)', '椅子總數', '椅子型號及數量 (型號:數量)', '桌子需求狀態', '椅子需求狀態', '備註說明', '填報狀態', '搬運完成標記'];
+    const title = ['【新北市立青山國民中小學 115學年度國小部班級教室桌椅清點與搬運調配統計總表】'];
+    const headers = [
+      '班級代號', '樓層', '班級名稱', '導師姓名', '分機', '學生人數',
+      '填報狀態', '數量審核結果',
+      '現有桌數', '桌數差額 (缺/多)', '現有桌子型號及數量',
+      '現有椅數', '椅數差額 (缺/多)', '現有椅子型號及數量',
+      '多餘/可釋出型號清單', '短缺/待撥補型號清單', '換型號/特殊調配需求',
+      '【搬運】調度需求與配置明細', '搬運執行進度', '導師備註說明', '最後更新時間'
+    ];
     
-    const rows = classrooms.map(c => {
-      const st = calculateInventoryStatus(c);
-      const deskStr = c.deskEntries.length > 0
-        ? c.deskEntries.map(d => `型號 ${d.model}: ${d.quantity}張`).join('; ')
-        : '無紀錄';
-      const chairStr = c.chairEntries.length > 0
-        ? c.chairEntries.map(ch => `型號 ${ch.model}: ${ch.quantity}張`).join('; ')
-        : '無紀錄';
+    const rows = sheetRows.map(r => [
+      r.id,
+      r.floor,
+      r.name,
+      r.teacher,
+      r.extension,
+      r.studentCount,
+      r.reportedStatus,
+      r.auditResult,
+      r.totalDesks,
+      r.deskDiffText,
+      r.deskListText,
+      r.totalChairs,
+      r.chairDiffText,
+      r.chairListText,
+      r.surplusItemsText,
+      r.shortageItemsText,
+      r.exchangeNeedText,
+      r.logisticsPlanText,
+      r.logisticsStatusText,
+      (r.note || '').replace(/"/g, '""'),
+      r.lastUpdated
+    ]);
 
-      return [
-        c.floor,
-        c.name,
-        c.titleExtra || '',
-        c.teacher,
-        c.extension,
-        c.studentCount,
-        c.reported ? st.totalDesks : 0,
-        deskStr,
-        c.reported ? st.totalChairs : 0,
-        chairStr,
-        c.reported ? st.deskTag : '尚未填報',
-        c.reported ? st.chairTag : '尚未填報',
-        (c.note || '').replace(/"/g, '""'),
-        c.reported ? '已填報' : '未填報',
-        c.isCompleted ? '已完成' : '處理中'
-      ];
-    });
+    let csvContent = [title, headers, ...rows].map(row => row.map(v => `"${v}"`).join(',')).join('\n');
 
-    return [title, headers, ...rows].map(row => row.map(v => `"${v}"`).join(',')).join('\n');
+    if (transferLogs.length > 0) {
+      csvContent += '\n\n';
+      csvContent += '"【課桌椅跨班調配與搬運派工明細紀錄表】"\n';
+      csvContent += '"派工單號","登記時間","調出班級 (來源)","調入班級 (需求)","搬運物品","型號","調配數量","搬運執行狀態","調配備註說明"\n';
+      transferLogs.forEach(l => {
+        csvContent += `"${l.id}","${l.timestamp}","${l.fromClassName}","${l.toClassName}","${l.type === 'desk' ? '桌子' : '椅子'}","${l.model}","${l.quantity} 張","${l.status === 'completed' ? '已搬運完成' : '待搬運'}","${(l.note || '').replace(/"/g, '""')}"\n`;
+      });
+    }
+
+    return csvContent;
   };
 
-  // Generate TSV for clipboard paste to Google Sheet
+  // Generate TSV for clipboard paste directly into Google Sheet
   const generateTSV = () => {
-    const title = ['【新北市立青山國民中小學 115學年度國小部班級教室桌椅清點與需求調查統計總表】'];
-    const headers = ['樓層', '班級名稱', '職稱/備註', '導師姓名', '分機', '學生人數', '桌子總數', '桌子型號與數量 (型號:數量)', '椅子總數', '椅子型號與數量 (型號:數量)', '桌子需求狀態', '椅子需求狀態', '導師備註說明'];
+    const title = ['【新北市立青山國民中小學 115學年度國小部班級教室桌椅清點與搬運調配統計總表】'];
+    const headers = [
+      '班級代號', '樓層', '班級名稱', '導師姓名', '分機', '學生人數',
+      '填報狀態', '數量審核結果',
+      '現有桌數', '桌數差額 (缺/多)', '現有桌子型號及數量',
+      '現有椅數', '椅數差額 (缺/多)', '現有椅子型號及數量',
+      '多餘/可釋出型號清單', '短缺/待撥補型號清單', '換型號/特殊調配需求',
+      '【搬運】調度需求與配置明細', '搬運執行進度', '導師備註說明', '最後更新時間'
+    ];
     
-    const rows = classrooms.map(c => {
-      const st = calculateInventoryStatus(c);
-      const deskStr = c.deskEntries.length > 0
-        ? c.deskEntries.map(d => `型號 ${d.model}: ${d.quantity}張`).join(' ; ')
-        : '無紀錄';
-      const chairStr = c.chairEntries.length > 0
-        ? c.chairEntries.map(ch => `型號 ${ch.model}: ${ch.quantity}張`).join(' ; ')
-        : '無紀錄';
-
-      return [
-        c.floor,
-        c.name,
-        c.titleExtra || '',
-        c.teacher,
-        c.extension,
-        c.studentCount,
-        c.reported ? st.totalDesks : 0,
-        deskStr,
-        c.reported ? st.totalChairs : 0,
-        chairStr,
-        c.reported ? st.deskTag : '未填報',
-        c.reported ? st.chairTag : '未填報',
-        c.note || ''
-      ];
-    });
+    const rows = sheetRows.map(r => [
+      r.id,
+      r.floor,
+      r.name,
+      r.teacher,
+      r.extension,
+      r.studentCount,
+      r.reportedStatus,
+      r.auditResult,
+      r.totalDesks,
+      r.deskDiffText,
+      r.deskListText,
+      r.totalChairs,
+      r.chairDiffText,
+      r.chairListText,
+      r.surplusItemsText,
+      r.shortageItemsText,
+      r.exchangeNeedText,
+      r.logisticsPlanText,
+      r.logisticsStatusText,
+      r.note || '',
+      r.lastUpdated
+    ]);
 
     return [title, headers, ...rows].map(row => row.join('\t')).join('\n');
   };
@@ -268,36 +303,34 @@ export const GoogleDocSheetExporter: React.FC<Props> = ({ classrooms }) => {
         setTimeout(() => setCopiedDoc(false), 2500);
       }
     } catch (err) {
-      console.error('Copy failed:', err);
-      // Fallback
       navigator.clipboard.writeText(generateTSV());
       setCopiedDoc(true);
       setTimeout(() => setCopiedDoc(false), 2500);
     }
   };
 
-  // Download .doc file compatible with Google Doc
+  // Download .doc file compatible with Google Doc & MS Word
   const handleDownloadDoc = () => {
     const html = generateDocHTML();
     const blob = new Blob(['\ufeff' + html], { type: 'application/msword' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `青山國小115學年度班級桌椅型號清點統計總表_${new Date().toISOString().slice(0,10)}.doc`;
+    a.download = `青山國小115學年度班級桌椅型號清點與搬運調配總表_${new Date().toISOString().slice(0,10)}.doc`;
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
   };
 
-  // Download CSV for Google Sheet
+  // Download CSV for Google Sheet & Excel
   const handleDownloadCSV = () => {
     const csvContent = generateCSV();
     const blob = new Blob(['\ufeff' + csvContent], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `青山國小班級桌椅清點與需求調查表_${new Date().toISOString().slice(0,10)}.csv`;
+    a.download = `青山國小班級桌椅清點與搬運調配統計總表_${new Date().toISOString().slice(0,10)}.csv`;
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
@@ -313,91 +346,327 @@ export const GoogleDocSheetExporter: React.FC<Props> = ({ classrooms }) => {
   };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 animate-fade-in">
       
       {/* Top Banner */}
-      <div className="bg-gradient-to-r from-blue-700 via-indigo-800 to-slate-900 text-white rounded-2xl p-6 shadow-md">
+      <div className="bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 text-white rounded-2xl p-6 shadow-md border border-slate-800">
         <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
           <div>
             <div className="flex items-center gap-2 mb-1">
-              <FileText className="w-6 h-6 text-blue-300" />
-              <h2 className="text-xl font-bold tracking-tight">Google Doc / Google Sheet 檔案匯出與預覽</h2>
+              <FileSpreadsheet className="w-6 h-6 text-emerald-400" />
+              <h2 className="text-xl font-bold tracking-tight flex items-center gap-2">
+                後台 Excel / Google Sheet 全新同步呈現
+                <span className="px-2.5 py-0.5 bg-emerald-500/20 text-emerald-300 text-xs font-semibold rounded-full border border-emerald-400/30">
+                  21 欄精確審核 + 搬運調度派工
+                </span>
+              </h2>
             </div>
-            <p className="text-xs text-blue-100 max-w-2xl leading-relaxed">
-              可直接產出 Google Doc 可完美讀取的相容 Word/Doc 格式與表格，或一鍵複製直接貼上 Google Doc 與 Google Sheet 試算表！
+            <p className="text-xs text-slate-300 max-w-2xl leading-relaxed">
+              即時整合全校前台填報：清楚展示各班「數量是否正確」、「多/少型號與數量」、「換型號調配需求」以及「【搬運】調度需求配置」，格式完全相容 Google Sheets、Google Docs 與 Excel！
             </p>
           </div>
 
-          <div className="flex items-center gap-2">
-            <button
-              onClick={() => setActiveFormat('doc')}
-              className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 ${
-                activeFormat === 'doc'
-                  ? 'bg-white text-blue-900 shadow-sm'
-                  : 'bg-blue-900/60 text-blue-200 hover:bg-blue-800'
-              }`}
-            >
-              <FileText className="w-4 h-4" />
-              <span>Google Doc 文件格式</span>
-            </button>
-
+          <div className="flex items-center gap-2 shrink-0">
             <button
               onClick={() => setActiveFormat('sheet')}
-              className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 ${
+              className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
                 activeFormat === 'sheet'
-                  ? 'bg-white text-emerald-900 shadow-sm'
-                  : 'bg-blue-900/60 text-blue-200 hover:bg-blue-800'
+                  ? 'bg-emerald-500 text-slate-950 shadow-md font-extrabold'
+                  : 'bg-white/10 text-slate-200 hover:bg-white/20'
               }`}
             >
               <FileSpreadsheet className="w-4 h-4" />
-              <span>Google Sheet 試算表</span>
+              <span>Google Sheet / Excel 總表</span>
+            </button>
+
+            <button
+              onClick={() => setActiveFormat('doc')}
+              className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
+                activeFormat === 'doc'
+                  ? 'bg-indigo-500 text-white shadow-md font-extrabold'
+                  : 'bg-white/10 text-slate-200 hover:bg-white/20'
+              }`}
+            >
+              <FileText className="w-4 h-4" />
+              <span>Google Doc / Word 文件</span>
             </button>
           </div>
         </div>
       </div>
 
       {/* Main Export Content Area */}
-      {activeFormat === 'doc' ? (
+      {activeFormat === 'sheet' ? (
+        /* Google Sheet Export Tab */
         <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-xs space-y-6">
           
           {/* Action Toolbar */}
-          <div className="flex flex-wrap items-center justify-between gap-3 p-4 bg-slate-50 border border-slate-200 rounded-xl">
-            <div className="flex items-center gap-2">
-              <Sparkles className="w-5 h-5 text-blue-600" />
+          <div className="flex flex-wrap items-center justify-between gap-3 p-4 bg-emerald-50/80 border border-emerald-200 rounded-xl">
+            <div className="flex items-center gap-2.5">
+              <div className="p-2 bg-emerald-600 rounded-lg text-white">
+                <FileSpreadsheet className="w-5 h-5" />
+              </div>
               <div>
-                <h4 className="font-bold text-slate-900 text-sm">Google Doc 排版文件檔產出</h4>
-                <p className="text-xs text-slate-500">點擊下方按鈕可直接複製富文字表格或下載 Google Doc 檔案</p>
+                <h4 className="font-bold text-emerald-950 text-sm">全新 21 欄試算表資料導出</h4>
+                <p className="text-xs text-emerald-800">可下載包含完整欄位的 .CSV 檔案，或一鍵複製 TSV 文字直接貼上 Google Sheet 試算表</p>
               </div>
             </div>
 
             <div className="flex flex-wrap items-center gap-2">
-              {/* Copy HTML Table */}
+              <button
+                onClick={handleCopyTSV}
+                className="px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold transition-colors shadow-xs flex items-center gap-1.5 cursor-pointer"
+              >
+                {copiedSheet ? <Check className="w-4 h-4 text-emerald-200" /> : <Copy className="w-4 h-4" />}
+                <span>{copiedSheet ? '已複製 TSV！(可直接貼入 Google Sheet)' : '複製 TSV (直貼 Google Sheet)'}</span>
+              </button>
+
+              <button
+                onClick={handleDownloadCSV}
+                className="px-4 py-2.5 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-bold transition-colors shadow-xs flex items-center gap-1.5 cursor-pointer"
+              >
+                <Download className="w-4 h-4 text-emerald-400" />
+                <span>下載 .CSV 檔案 (Excel相容)</span>
+              </button>
+            </div>
+          </div>
+
+          {/* School-Wide Summary Stat Cards */}
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
+            <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl text-center">
+              <span className="text-slate-500 block text-[11px]">班級填報進度</span>
+              <strong className="text-sm text-slate-900 font-mono">{reportedCount} / {classrooms.length} 班</strong>
+            </div>
+            <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl text-center">
+              <span className="text-slate-500 block text-[11px]">學生總人數</span>
+              <strong className="text-sm text-slate-900 font-mono">{totalStudents} 人</strong>
+            </div>
+            <div className="p-3 bg-rose-50 border border-rose-200 rounded-xl text-center">
+              <span className="text-rose-700 block text-[11px]">全校短缺缺口</span>
+              <strong className="text-sm text-rose-700 font-mono">缺桌 {totalDeskShortage} / 缺椅 {totalChairShortage}</strong>
+            </div>
+            <div className="p-3 bg-blue-50 border border-blue-200 rounded-xl text-center">
+              <span className="text-blue-700 block text-[11px]">全校多餘釋出</span>
+              <strong className="text-sm text-blue-700 font-mono">多桌 {totalDeskSurplus} / 多椅 {totalChairSurplus}</strong>
+            </div>
+          </div>
+
+          {/* Interactive Google Sheet Grid View */}
+          <div className="border border-slate-200 rounded-xl overflow-hidden shadow-xs">
+            <div className="bg-slate-900 text-white px-4 py-3 font-bold text-xs flex items-center justify-between">
+              <span className="flex items-center gap-2">
+                <Table className="w-4 h-4 text-emerald-400" />
+                <span>後台 Google Sheet 試算表呈現預覽 (21 欄結構)</span>
+              </span>
+              <span className="text-[11px] font-normal text-slate-300">橫向捲動可檢視所有型號清單與【搬運】調度需求</span>
+            </div>
+
+            <div className="overflow-x-auto max-h-[500px]">
+              <table className="w-full text-left text-xs border-collapse whitespace-nowrap">
+                <thead className="sticky top-0 z-10 bg-slate-100 text-slate-800 font-bold border-b border-slate-300 text-[11px]">
+                  <tr>
+                    <th className="py-2.5 px-3 border-r border-slate-300 text-center">班級</th>
+                    <th className="py-2.5 px-2 border-r border-slate-300 text-center">樓層</th>
+                    <th className="py-2.5 px-3 border-r border-slate-300">導師(分機)</th>
+                    <th className="py-2.5 px-2.5 border-r border-slate-300 text-center">學生</th>
+                    <th className="py-2.5 px-3 border-r border-slate-300 text-center bg-emerald-50 text-emerald-900 font-extrabold">數量審核結果</th>
+                    <th className="py-2.5 px-2.5 border-r border-slate-300 text-center">現有桌數</th>
+                    <th className="py-2.5 px-3 border-r border-slate-300 text-center">桌差額</th>
+                    <th className="py-2.5 px-3.5 border-r border-slate-300">現有桌子型號及數量</th>
+                    <th className="py-2.5 px-2.5 border-r border-slate-300 text-center">現有椅數</th>
+                    <th className="py-2.5 px-3 border-r border-slate-300 text-center">椅差額</th>
+                    <th className="py-2.5 px-3.5 border-r border-slate-300">現有椅子型號及數量</th>
+                    <th className="py-2.5 px-3.5 border-r border-slate-300 text-blue-800">多餘/可釋出型號</th>
+                    <th className="py-2.5 px-3.5 border-r border-slate-300 text-rose-800">短缺/待撥補型號</th>
+                    <th className="py-2.5 px-3.5 border-r border-slate-300 text-amber-800 bg-amber-50">換型號/調配需求</th>
+                    <th className="py-2.5 px-4 border-r border-slate-300 bg-indigo-50 text-indigo-950 font-extrabold">【搬運】調度需求與配置明細</th>
+                    <th className="py-2.5 px-3 border-r border-slate-300 text-center">搬運進度</th>
+                    <th className="py-2.5 px-3">導師備註說明</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-200 font-mono text-[11px]">
+                  {sheetRows.map((r, i) => {
+                    const isAuditOk = r.auditResult.includes('完全正確');
+                    const hasShortage = r.auditResult.includes('缺');
+                    const hasSurplus = r.auditResult.includes('多');
+
+                    return (
+                      <tr key={r.id} className="hover:bg-slate-50 transition-colors">
+                        <td className="py-2 px-3 border-r border-slate-200 font-bold text-slate-900 font-sans">{r.name}</td>
+                        <td className="py-2 px-2 border-r border-slate-200 font-bold text-center text-slate-600 font-sans">{r.floor}</td>
+                        <td className="py-2 px-3 border-r border-slate-200 font-sans">{r.teacher} ({r.extension})</td>
+                        <td className="py-2 px-2.5 border-r border-slate-200 text-center font-bold text-slate-900">{r.studentCount}</td>
+                        
+                        {/* 數量審核結果 */}
+                        <td className="py-2 px-3 border-r border-slate-200 text-center font-sans">
+                          {r.reportedStatus === '待填報' ? (
+                            <span className="px-2 py-0.5 bg-slate-100 text-slate-500 rounded text-[10px]">待填報</span>
+                          ) : isAuditOk ? (
+                            <span className="px-2 py-0.5 bg-emerald-100 text-emerald-800 font-bold rounded text-[10px]">🟢 數量正確</span>
+                          ) : hasShortage ? (
+                            <span className="px-2 py-0.5 bg-rose-100 text-rose-800 font-bold rounded text-[10px]">{r.auditResult}</span>
+                          ) : (
+                            <span className="px-2 py-0.5 bg-blue-100 text-blue-800 font-bold rounded text-[10px]">{r.auditResult}</span>
+                          )}
+                        </td>
+
+                        {/* 桌子 */}
+                        <td className="py-2 px-2.5 border-r border-slate-200 text-center">{r.reportedStatus === '已填報' ? r.totalDesks : '-'}</td>
+                        <td className={`py-2 px-3 border-r border-slate-200 text-center font-bold ${
+                          r.deskDiffText.includes('缺') ? 'text-rose-600' : r.deskDiffText.includes('多') ? 'text-blue-600' : 'text-emerald-700'
+                        }`}>
+                          {r.deskDiffText}
+                        </td>
+                        <td className="py-2 px-3.5 border-r border-slate-200 font-sans">{r.deskListText}</td>
+
+                        {/* 椅子 */}
+                        <td className="py-2 px-2.5 border-r border-slate-200 text-center">{r.reportedStatus === '已填報' ? r.totalChairs : '-'}</td>
+                        <td className={`py-2 px-3 border-r border-slate-200 text-center font-bold ${
+                          r.chairDiffText.includes('缺') ? 'text-rose-600' : r.chairDiffText.includes('多') ? 'text-blue-600' : 'text-emerald-700'
+                        }`}>
+                          {r.chairDiffText}
+                        </td>
+                        <td className="py-2 px-3.5 border-r border-slate-200 font-sans">{r.chairListText}</td>
+
+                        {/* 多餘 / 短缺 */}
+                        <td className="py-2 px-3.5 border-r border-slate-200 font-sans text-blue-900">{r.surplusItemsText}</td>
+                        <td className="py-2 px-3.5 border-r border-slate-200 font-sans text-rose-900">{r.shortageItemsText}</td>
+
+                        {/* 換型號需求 */}
+                        <td className="py-2 px-3.5 border-r border-slate-200 font-sans bg-amber-50/50">
+                          {r.exchangeNeedText.includes('需更換') ? (
+                            <span className="text-amber-900 font-bold">{r.exchangeNeedText}</span>
+                          ) : (
+                            <span className="text-slate-400">{r.exchangeNeedText}</span>
+                          )}
+                        </td>
+
+                        {/* 【搬運】調度需求與配置明細 */}
+                        <td className="py-2 px-4 border-r border-slate-200 font-sans bg-indigo-50/30">
+                          <span className={`font-semibold ${
+                            r.logisticsPlanText.includes('【待') ? 'text-rose-700 font-bold' :
+                            r.logisticsPlanText.includes('【可調出') ? 'text-blue-700 font-bold' :
+                            r.logisticsPlanText.includes('已完成') ? 'text-emerald-700 font-bold' :
+                            'text-slate-600'
+                          }`}>
+                            {r.logisticsPlanText}
+                          </span>
+                        </td>
+
+                        {/* 搬運執行進度 */}
+                        <td className="py-2 px-3 border-r border-slate-200 text-center font-sans">
+                          {r.logisticsStatusText === '已完成' ? (
+                            <span className="px-2 py-0.5 bg-emerald-100 text-emerald-800 font-bold rounded text-[10px]">已完成</span>
+                          ) : r.logisticsStatusText === '待搬運調度' ? (
+                            <span className="px-2 py-0.5 bg-amber-100 text-amber-900 font-bold rounded text-[10px]">待搬運調度</span>
+                          ) : (
+                            <span className="text-slate-400 text-[10px]">{r.logisticsStatusText}</span>
+                          )}
+                        </td>
+
+                        {/* 導師備註 */}
+                        <td className="py-2 px-3 font-sans truncate max-w-xs text-slate-700">{r.note || '-'}</td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          {/* Transfer Dispatch Logs Sub-Table Preview if exists */}
+          {transferLogs.length > 0 && (
+            <div className="border border-emerald-200 rounded-xl overflow-hidden shadow-2xs">
+              <div className="bg-emerald-900 text-white px-4 py-3 font-bold text-xs flex items-center justify-between">
+                <span className="flex items-center gap-2">
+                  <Truck className="w-4 h-4 text-emerald-300" />
+                  <span>分頁 2 預覽：【搬運調度派工與歷程清單】(Transfer & Dispatch Logs)</span>
+                </span>
+                <span className="text-[11px] font-normal text-emerald-200">共 {transferLogs.length} 筆跨班調配派工任務</span>
+              </div>
+              <div className="overflow-x-auto">
+                <table className="w-full text-left text-xs border-collapse">
+                  <thead className="bg-emerald-50 text-emerald-950 font-bold border-b border-emerald-200">
+                    <tr>
+                      <th className="py-2 px-3">單號</th>
+                      <th className="py-2 px-3">時間</th>
+                      <th className="py-2 px-3">調出班級 (來源)</th>
+                      <th className="py-2 px-3">調入班級 (需求)</th>
+                      <th className="py-2 px-3">物品與型號</th>
+                      <th className="py-2 px-3 text-center">調配數量</th>
+                      <th className="py-2 px-3 text-center">搬運狀態</th>
+                      <th className="py-2 px-3">備註說明</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-emerald-100 font-mono text-[11px]">
+                    {transferLogs.map(l => (
+                      <tr key={l.id} className="hover:bg-emerald-50/40">
+                        <td className="py-1.5 px-3 font-bold">{l.id}</td>
+                        <td className="py-1.5 px-3 text-slate-500">{l.timestamp}</td>
+                        <td className="py-1.5 px-3 font-sans font-bold text-slate-900">{l.fromClassName}</td>
+                        <td className="py-1.5 px-3 font-sans font-bold text-indigo-900">{l.toClassName}</td>
+                        <td className="py-1.5 px-3 font-sans">
+                          {l.type === 'desk' ? '🪑 桌子' : '💺 椅子'} - 型號 <strong className="text-emerald-800">{l.model}</strong>
+                        </td>
+                        <td className="py-1.5 px-3 text-center font-bold text-emerald-900">{l.quantity} 張</td>
+                        <td className="py-1.5 px-3 text-center font-sans">
+                          {l.status === 'completed' ? (
+                            <span className="px-2 py-0.5 bg-emerald-100 text-emerald-800 font-bold rounded text-[10px]">已搬運完成</span>
+                          ) : (
+                            <span className="px-2 py-0.5 bg-amber-100 text-amber-900 font-bold rounded text-[10px]">待搬運</span>
+                          )}
+                        </td>
+                        <td className="py-1.5 px-3 font-sans text-slate-600">{l.note || '-'}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+
+        </div>
+      ) : (
+        /* Google Doc / Word Format Tab */
+        <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-xs space-y-6">
+          
+          {/* Action Toolbar */}
+          <div className="flex flex-wrap items-center justify-between gap-3 p-4 bg-indigo-50/80 border border-indigo-200 rounded-xl">
+            <div className="flex items-center gap-2.5">
+              <div className="p-2 bg-indigo-600 rounded-lg text-white">
+                <FileText className="w-5 h-5" />
+              </div>
+              <div>
+                <h4 className="font-bold text-indigo-950 text-sm">Google Doc / Word 排版文件檔產出</h4>
+                <p className="text-xs text-indigo-800">點擊下方按鈕可直接複製富文字表格，或下載為標準相容的 .doc 檔案</p>
+              </div>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-2">
               <button
                 onClick={handleCopyDoc}
-                className="px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold transition-colors shadow-xs flex items-center gap-1.5 cursor-pointer"
+                className="px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold transition-colors shadow-xs flex items-center gap-1.5 cursor-pointer"
               >
                 {copiedDoc ? <Check className="w-4 h-4 text-emerald-300" /> : <Copy className="w-4 h-4" />}
                 <span>{copiedDoc ? '已複製！(可直接 Ctrl+V 貼入 Google Doc)' : '複製表格至 Google Doc'}</span>
               </button>
 
-              {/* Download Doc */}
               <button
                 onClick={handleDownloadDoc}
                 className="px-4 py-2.5 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-bold transition-colors shadow-xs flex items-center gap-1.5 cursor-pointer"
               >
-                <Download className="w-4 h-4 text-blue-400" />
+                <Download className="w-4 h-4 text-indigo-400" />
                 <span>下載 Google Doc (.doc) 檔案</span>
               </button>
             </div>
           </div>
 
           {/* Rendered Doc Document Preview Frame */}
-          <div className="border border-slate-300 rounded-2xl p-8 bg-white shadow-inner max-w-4xl mx-auto space-y-6 font-sans">
+          <div className="border border-slate-300 rounded-2xl p-8 bg-white shadow-inner max-w-5xl mx-auto space-y-6 font-sans">
             
             {/* Header Document Banner */}
             <div className="text-center border-b-2 border-slate-900 pb-4">
               <h2 className="text-2xl font-black text-slate-900 tracking-tight">新北市立青山國民中小學 (國小部)</h2>
-              <h3 className="text-lg font-bold text-slate-700 mt-1">115學年度 班級教室桌椅型號清點與需求調查總表</h3>
+              <h3 className="text-lg font-bold text-slate-700 mt-1">115學年度 班級教室桌椅型號清點與搬運調配統計總表</h3>
               <p className="text-xs text-slate-500 mt-2">承辦單位：總務處｜產出時間：{new Date().toLocaleDateString('zh-TW')}</p>
             </div>
 
@@ -430,76 +699,42 @@ export const GoogleDocSheetExporter: React.FC<Props> = ({ classrooms }) => {
                     <th className="p-2 border border-slate-400">班級</th>
                     <th className="p-2 border border-slate-400">導師/分機</th>
                     <th className="p-2 border border-slate-400 text-center">學生</th>
-                    <th className="p-2 border border-slate-400 text-center">桌數</th>
-                    <th className="p-2 border border-slate-400">桌子型號及數量</th>
-                    <th className="p-2 border border-slate-400 text-center">椅數</th>
-                    <th className="p-2 border border-slate-400">椅子型號及數量</th>
-                    <th className="p-2 border border-slate-400 text-center">需求狀態</th>
+                    <th className="p-2 border border-slate-400 text-center">審核結果</th>
+                    <th className="p-2 border border-slate-400">桌子清點 (差額)</th>
+                    <th className="p-2 border border-slate-400">椅子清點 (差額)</th>
+                    <th className="p-2 border border-slate-400">【搬運】調度配置明細</th>
                     <th className="p-2 border border-slate-400">導師備註</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-slate-300">
-                  {classrooms.map(c => {
-                    if (!c.reported) {
-                      return (
-                        <tr key={c.id} className="bg-amber-50/40">
-                          <td className="p-2 border border-slate-300 text-center font-bold">{c.floor}</td>
-                          <td className="p-2 border border-slate-300 font-bold">{c.name}</td>
-                          <td className="p-2 border border-slate-300">{c.teacher} ({c.extension})</td>
-                          <td className="p-2 border border-slate-300 text-center font-mono">{c.studentCount}</td>
-                          <td className="p-2 border border-slate-300 text-center text-slate-400">-</td>
-                          <td className="p-2 border border-slate-300 italic text-amber-700 font-bold">尚未填報</td>
-                          <td className="p-2 border border-slate-300 text-center text-slate-400">-</td>
-                          <td className="p-2 border border-slate-300 italic text-amber-700 font-bold">尚未填報</td>
-                          <td className="p-2 border border-slate-300 text-center">
-                            <span className="px-1.5 py-0.5 bg-amber-100 text-amber-800 text-[10px] font-bold rounded">
-                              尚未填報
-                            </span>
-                          </td>
-                          <td className="p-2 border border-slate-300 text-slate-400">-</td>
-                        </tr>
-                      );
-                    }
-
-                    const st = calculateInventoryStatus(c);
-                    const deskListStr = c.deskEntries.map(d => `${d.model} (${d.quantity}張)`).join('、');
-                    const chairListStr = c.chairEntries.map(ch => `${ch.model} (${ch.quantity}張)`).join('、');
-
-                    return (
-                      <tr key={c.id} className="hover:bg-slate-50">
-                        <td className="p-2 border border-slate-300 text-center font-bold">{c.floor}</td>
-                        <td className="p-2 border border-slate-300 font-bold">
-                          {c.name} <span className="text-[10px] text-indigo-600 font-normal">{c.titleExtra}</span>
-                        </td>
-                        <td className="p-2 border border-slate-300">{c.teacher} ({c.extension})</td>
-                        <td className="p-2 border border-slate-300 text-center font-mono font-bold">{c.studentCount}</td>
-                        <td className="p-2 border border-slate-300 text-center font-mono">{st.totalDesks}</td>
-                        <td className="p-2 border border-slate-300 font-mono text-[11px]">{deskListStr}</td>
-                        <td className="p-2 border border-slate-300 text-center font-mono">{st.totalChairs}</td>
-                        <td className="p-2 border border-slate-300 font-mono text-[11px]">{chairListStr}</td>
-                        <td className="p-2 border border-slate-300 text-center">
-                          <div className="space-y-1">
-                            {st.deskDifference === 0 ? (
-                              <span className="px-1.5 py-0.5 bg-emerald-100 text-emerald-800 text-[10px] font-bold rounded block">桌數正確</span>
-                            ) : st.deskDifference < 0 ? (
-                              <span className="px-1.5 py-0.5 bg-rose-100 text-rose-800 text-[10px] font-bold rounded block">缺桌 {Math.abs(st.deskDifference)}</span>
-                            ) : (
-                              <span className="px-1.5 py-0.5 bg-blue-100 text-blue-800 text-[10px] font-bold rounded block">多桌 {st.deskDifference}</span>
-                            )}
-
-                            {st.chairDifference === 0 ? (
-                              <span className="px-1.5 py-0.5 bg-emerald-100 text-emerald-800 text-[10px] font-bold rounded block">椅數正確</span>
-                            ) : st.chairDifference < 0 ? (
-                              <span className="px-1.5 py-0.5 bg-rose-100 text-rose-800 text-[10px] font-bold rounded block">缺椅 {Math.abs(st.chairDifference)}</span>
-                            ) : (
-                              <span className="px-1.5 py-0.5 bg-blue-100 text-blue-800 text-[10px] font-bold rounded block">多椅 {st.chairDifference}</span>
-                            )}
-                          </div>
-                        </td>
-                        <td className="p-2 border border-slate-300 text-[11px] text-slate-700">{c.note || '-'}</td>
-                      </tr>
-                    );
-                  })}
+                <tbody className="divide-y divide-slate-300 text-[11px]">
+                  {sheetRows.map(r => (
+                    <tr key={r.id} className="hover:bg-slate-50">
+                      <td className="p-2 border border-slate-300 text-center font-bold">{r.floor}</td>
+                      <td className="p-2 border border-slate-300 font-bold">{r.name}</td>
+                      <td className="p-2 border border-slate-300">{r.teacher} ({r.extension})</td>
+                      <td className="p-2 border border-slate-300 text-center font-mono font-bold">{r.studentCount}</td>
+                      <td className="p-2 border border-slate-300 text-center font-bold">
+                        {r.auditResult}
+                      </td>
+                      <td className="p-2 border border-slate-300">
+                        {r.reportedStatus === '已填報' ? (
+                          <>總數: {r.totalDesks} ({r.deskDiffText})<br/><span className="text-slate-600 text-[10px]">{r.deskListText}</span></>
+                        ) : '尚未填報'}
+                      </td>
+                      <td className="p-2 border border-slate-300">
+                        {r.reportedStatus === '已填報' ? (
+                          <>總數: {r.totalChairs} ({r.chairDiffText})<br/><span className="text-slate-600 text-[10px]">{r.chairListText}</span></>
+                        ) : '尚未填報'}
+                      </td>
+                      <td className="p-2 border border-slate-300 font-semibold text-indigo-950">
+                        {r.logisticsPlanText}
+                        {r.exchangeNeedText.includes('需更換') && (
+                          <div className="text-[10px] text-amber-800 mt-0.5">{r.exchangeNeedText}</div>
+                        )}
+                      </td>
+                      <td className="p-2 border border-slate-300 text-[10px] text-slate-700">{r.note || '-'}</td>
+                    </tr>
+                  ))}
                 </tbody>
               </table>
             </div>
@@ -512,98 +747,9 @@ export const GoogleDocSheetExporter: React.FC<Props> = ({ classrooms }) => {
           </div>
 
         </div>
-      ) : (
-        /* Google Sheet Export Tab */
-        <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-xs space-y-6">
-          
-          <div className="flex flex-wrap items-center justify-between gap-3 p-4 bg-emerald-50 border border-emerald-200 rounded-xl">
-            <div className="flex items-center gap-2">
-              <FileSpreadsheet className="w-5 h-5 text-emerald-700" />
-              <div>
-                <h4 className="font-bold text-emerald-950 text-sm">Google Sheet 試算表格式導出</h4>
-                <p className="text-xs text-emerald-800">可下載 CSV 或一鍵複製 TSV 文字直貼 Google Sheet 試算表儲存格</p>
-              </div>
-            </div>
-
-            <div className="flex flex-wrap items-center gap-2">
-              <button
-                onClick={handleCopyTSV}
-                className="px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold transition-colors shadow-xs flex items-center gap-1.5 cursor-pointer"
-              >
-                {copiedSheet ? <Check className="w-4 h-4 text-emerald-200" /> : <Copy className="w-4 h-4" />}
-                <span>{copiedSheet ? '已複製 TSV！(可直接貼入 Google Sheet)' : '複製 TSV (直貼 Google Sheet)'}</span>
-              </button>
-
-              <button
-                onClick={handleDownloadCSV}
-                className="px-4 py-2.5 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-bold transition-colors shadow-xs flex items-center gap-1.5 cursor-pointer"
-              >
-                <Download className="w-4 h-4 text-emerald-400" />
-                <span>下載 .CSV 檔案</span>
-              </button>
-            </div>
-          </div>
-
-          {/* Interactive Google Sheet Grid View */}
-          <div className="border border-slate-200 rounded-xl overflow-hidden shadow-2xs">
-            <div className="bg-slate-800 text-white px-4 py-3 font-bold text-xs flex items-center justify-between">
-              <span className="flex items-center gap-2">
-                <FileSpreadsheet className="w-4 h-4 text-emerald-400" />
-                <span>Google Sheet 試算表同步預覽視窗</span>
-              </span>
-              <span className="text-[11px] font-normal text-slate-300">即時呈現前台各班填報更新</span>
-            </div>
-
-            <div className="overflow-x-auto">
-              <table className="w-full text-left text-xs border-collapse">
-                <thead>
-                  <tr className="bg-slate-100 text-slate-700 font-bold border-b border-slate-300">
-                    <th className="py-2 px-3 border-r border-slate-200">A (樓層)</th>
-                    <th className="py-2 px-3 border-r border-slate-200">B (班級)</th>
-                    <th className="py-2 px-3 border-r border-slate-200">C (導師)</th>
-                    <th className="py-2 px-3 border-r border-slate-200">D (分機)</th>
-                    <th className="py-2 px-3 border-r border-slate-200">E (學生數)</th>
-                    <th className="py-2 px-3 border-r border-slate-200">F (桌數)</th>
-                    <th className="py-2 px-3 border-r border-slate-200">G (桌子型號)</th>
-                    <th className="py-2 px-3 border-r border-slate-200">H (椅數)</th>
-                    <th className="py-2 px-3 border-r border-slate-200">I (椅子型號)</th>
-                    <th className="py-2 px-3 border-r border-slate-200">J (桌子需求)</th>
-                    <th className="py-2 px-3">K (導師備註)</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-200 font-mono text-[11px]">
-                  {classrooms.map((c, i) => {
-                    const st = calculateInventoryStatus(c);
-                    return (
-                      <tr key={c.id} className="hover:bg-emerald-50/30">
-                        <td className="py-1.5 px-3 border-r border-slate-200 font-bold text-center">{c.floor}</td>
-                        <td className="py-1.5 px-3 border-r border-slate-200 font-bold text-slate-900">{c.name}</td>
-                        <td className="py-1.5 px-3 border-r border-slate-200">{c.teacher}</td>
-                        <td className="py-1.5 px-3 border-r border-slate-200">{c.extension}</td>
-                        <td className="py-1.5 px-3 border-r border-slate-200 text-center font-bold">{c.studentCount}</td>
-                        <td className="py-1.5 px-3 border-r border-slate-200 text-center">{c.reported ? st.totalDesks : '-'}</td>
-                        <td className="py-1.5 px-3 border-r border-slate-200">
-                          {c.deskEntries.map(d => `型號 ${d.model}: ${d.quantity}張`).join(' ; ') || '無紀錄'}
-                        </td>
-                        <td className="py-1.5 px-3 border-r border-slate-200 text-center">{c.reported ? st.totalChairs : '-'}</td>
-                        <td className="py-1.5 px-3 border-r border-slate-200">
-                          {c.chairEntries.map(ch => `型號 ${ch.model}: ${ch.quantity}張`).join(' ; ') || '無紀錄'}
-                        </td>
-                        <td className="py-1.5 px-3 border-r border-slate-200 font-bold">
-                          {c.reported ? st.deskTag : '未填'}
-                        </td>
-                        <td className="py-1.5 px-3 truncate max-w-xs">{c.note || '-'}</td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-          </div>
-
-        </div>
       )}
 
     </div>
   );
 };
+

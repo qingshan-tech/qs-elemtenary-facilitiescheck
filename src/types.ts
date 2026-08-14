@@ -64,7 +64,6 @@ export interface TransferLog {
   quantity: number;
   status: 'pending' | 'completed';
   timestamp: string;
-  itemType?: string;
   note?: string;
 }
 

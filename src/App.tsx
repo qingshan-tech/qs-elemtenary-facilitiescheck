@@ -238,12 +238,11 @@ export function App() {
       fromClassName: fromClass.name,
       toClassId,
       toClassName: toClass.name,
-      itemType,
+      type: itemType,
       model,
       quantity,
       status: 'pending',
-      note,
-      type: 'desk'
+      note
     };
 
     setTransferLogs(prev => [newLog, ...prev]);
@@ -409,7 +408,7 @@ export function App() {
 
         {/* Tab 3: Google Doc Formatted Document & Sheet Exporter */}
         {activeTab === 'exporter' && (
-          <GoogleDocSheetExporter classrooms={classrooms} />
+          <GoogleDocSheetExporter classrooms={classrooms} transferLogs={transferLogs} />
         )}
 
       </main>
