@@ -242,7 +242,8 @@ export function App() {
       model,
       quantity,
       status: 'pending',
-      note
+      note,
+      type: 'desk'
     };
 
     setTransferLogs(prev => [newLog, ...prev]);
