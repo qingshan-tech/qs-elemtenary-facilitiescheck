@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Classroom, TransferLog } from './types';
 import { INITIAL_CLASSROOMS, INITIAL_TRANSFER_LOGS } from './data/initialData';
+import { transformClassroomToSheetRow } from './utils/sheetUtils';
 import { Header } from './components/Header';
 import { FloorFilter } from './components/FloorFilter';
 import { ClassCard } from './components/ClassCard';
@@ -124,12 +125,14 @@ export function App() {
     if (!webAppUrl.trim()) return;
 
     try {
+      const row = transformClassroomToSheetRow(classroom);
       await fetch(webAppUrl, {
         method: 'POST',
         mode: 'no-cors',
         headers: { 'Content-Type': 'text/plain;charset=utf-8' },
         body: JSON.stringify({
           action: 'updateClassroom',
+          row,
           classroom
         })
       });
@@ -144,13 +147,16 @@ export function App() {
     setIsSyncing(true);
 
     try {
+      const rows = classrooms.map(c => transformClassroomToSheetRow(c));
       await fetch(webAppUrl, {
         method: 'POST',
         mode: 'no-cors',
         headers: { 'Content-Type': 'text/plain;charset=utf-8' },
         body: JSON.stringify({
           action: 'syncAll',
-          classrooms
+          rows,
+          classrooms,
+          transferLogs
         })
       });
       setLastSyncTime(new Date().toLocaleTimeString('zh-TW', { hour: '2-digit', minute: '2-digit' }));

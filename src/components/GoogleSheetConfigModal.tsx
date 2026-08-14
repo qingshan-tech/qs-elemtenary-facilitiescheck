@@ -45,7 +45,7 @@ export const GoogleSheetConfigModal: React.FC<Props> = ({
   const [copied, setCopied] = useState(false);
   const [testResult, setTestResult] = useState<{ success: boolean; msg: string } | null>(null);
 
-  // Google Apps Script Backend Database Code (Redesigned with Full Sync & Formatting)
+  // Google Apps Script Backend Database Code (Redesigned with Full Sync, Auto-Formatting & Fallback)
   const appsScriptCode = `/**
  * 新北市立青山國民中小學 115學年度課桌椅清點與搬運調配管理系統
  * Google Apps Script 雲端同步與自動排版後端腳本 (全新升級版)
@@ -55,15 +55,36 @@ function doGet(e) {
   var ss = SpreadsheetApp.getActiveSpreadsheet();
   var mainSheet = ss.getSheetByName("班級桌椅盤點總表") || ss.getActiveSheet();
   var data = mainSheet.getDataRange().getValues();
-  return ContentService.createTextOutput(JSON.stringify({ status: "success", data: data }))
-    .setMimeType(ContentService.MimeType.JSON);
+  return ContentService.createTextOutput(JSON.stringify({
+    status: "success",
+    rowCount: data.length,
+    timestamp: new Date().toISOString()
+  })).setMimeType(ContentService.MimeType.JSON);
 }
 
 function doPost(e) {
   try {
+    if (!e || !e.postData || !e.postData.contents) {
+      return ContentService.createTextOutput(JSON.stringify({ status: "error", message: "No post data received" }))
+        .setMimeType(ContentService.MimeType.JSON);
+    }
+
     var contents = JSON.parse(e.postData.contents);
     var ss = SpreadsheetApp.getActiveSpreadsheet();
     
+    // 輔助函式：確保工作表有足夠的列數與欄數 (防止使用者手動刪除欄列導致超出範圍例外)
+    function ensureCapacity(targetSheet, minRows, minCols) {
+      if (!targetSheet) return;
+      var currentCols = targetSheet.getMaxColumns();
+      if (currentCols < minCols) {
+        targetSheet.insertColumnsAfter(currentCols, minCols - currentCols);
+      }
+      var currentRows = targetSheet.getMaxRows();
+      if (currentRows < minRows) {
+        targetSheet.insertRowsAfter(currentRows, minRows - currentRows);
+      }
+    }
+
     // 工作表 1：班級桌椅盤點與搬運調配總表
     var sheet = ss.getSheetByName("班級桌椅盤點總表");
     if (!sheet) {
@@ -72,7 +93,9 @@ function doPost(e) {
     
     function setupMainHeader() {
       sheet.clear();
-      // 標題大橫幅
+      ensureCapacity(sheet, 10, 22);
+
+      // 標題大橫幅 (A1:U1)
       sheet.getRange(1, 1, 1, 21).merge()
         .setValue("【新北市立青山國民中小學 115學年度國小部班級教室桌椅清點與搬運調配統計總表】")
         .setBackground("#0f172a")
@@ -114,6 +137,7 @@ function doPost(e) {
         logSheet = ss.insertSheet("搬運調度派工清單", 1);
       }
       logSheet.clear();
+      ensureCapacity(logSheet, (logs.length || 0) + 10, 10);
 
       logSheet.getRange(1, 1, 1, 9).merge()
         .setValue("【新北市立青山國民中小學 課桌椅跨班調配與搬運派工明細紀錄表】")
@@ -141,14 +165,14 @@ function doPost(e) {
       logSheet.setRowHeight(2, 32);
       logSheet.setFrozenRows(2);
 
-      if (logs.length > 0) {
+      if (logs && logs.length > 0) {
         var logRows = logs.map(function(l) {
           return [
             l.id || "",
             l.timestamp || "",
             l.fromClassName || "",
             l.toClassName || "",
-            l.itemType === "desk" ? "桌子" : "椅子",
+            (l.type === "desk" || l.itemType === "desk") ? "桌子" : "椅子",
             l.model || "",
             (l.quantity || 0) + " 張",
             l.status === "completed" ? "已搬運完成" : "待搬運",
@@ -158,29 +182,55 @@ function doPost(e) {
         logSheet.getRange(3, 1, logRows.length, 9).setValues(logRows)
           .setFontSize(10)
           .setVerticalAlignment("middle");
+        logSheet.getRange(2, 1, logRows.length + 1, 9).setBorder(true, true, true, true, true, true, "#cbd5e1", null);
       }
       logSheet.autoResizeColumns(1, 9);
     }
 
-    // 1. 一鍵全校整批重設與完整同步
-    if (contents.action === "syncAll" && contents.rows) {
+    // 輔助函式：將單筆物件轉為 21 欄陣列
+    function formatRow(r) {
+      if (Array.isArray(r)) return r;
+      return [
+        r.id || "",
+        r.floor || "",
+        r.name || "",
+        r.teacher || "",
+        r.extension || "",
+        r.studentCount || 0,
+        r.reportedStatus || (r.reported ? "已填報" : "待填報"),
+        r.auditResult || "",
+        r.totalDesks !== undefined ? r.totalDesks : (r.reported ? 0 : "-"),
+        r.deskDiffText || "",
+        r.deskListText || (r.deskEntries ? r.deskEntries.map(function(d){ return d.model + "(" + d.quantity + "張)"; }).join("、") : ""),
+        r.totalChairs !== undefined ? r.totalChairs : (r.reported ? 0 : "-"),
+        r.chairDiffText || "",
+        r.chairListText || (r.chairEntries ? r.chairEntries.map(function(ch){ return ch.model + "(" + ch.quantity + "張)"; }).join("、") : ""),
+        r.surplusItemsText || "",
+        r.shortageItemsText || "",
+        r.exchangeNeedText || "",
+        r.logisticsPlanText || "",
+        r.logisticsStatusText || (r.isCompleted ? "已完成" : "處理中"),
+        r.note || "",
+        r.lastUpdated || new Date().toLocaleString("zh-TW")
+      ];
+    }
+
+    // 1. 一鍵全校整批重設與完整同步 (支援 contents.rows 或 contents.classrooms)
+    if (contents.action === "syncAll") {
       setupMainHeader();
-      var rows = contents.rows.map(function(r) {
-        return [
-          r.id, r.floor, r.name, r.teacher, r.extension, r.studentCount || 0,
-          r.reportedStatus, r.auditResult,
-          r.totalDesks, r.deskDiffText, r.deskListText,
-          r.totalChairs, r.chairDiffText, r.chairListText,
-          r.surplusItemsText, r.shortageItemsText, r.exchangeNeedText,
-          r.logisticsPlanText, r.logisticsStatusText, r.note, r.lastUpdated
-        ];
-      });
+      var rawItems = contents.rows || contents.classrooms || [];
+      var rows = rawItems.map(formatRow);
 
       if (rows.length > 0) {
+        ensureCapacity(sheet, rows.length + 5, 22);
+
         sheet.getRange(3, 1, rows.length, 21).setValues(rows)
           .setFontSize(10)
           .setVerticalAlignment("middle");
         
+        // 格線與背景微調
+        sheet.getRange(2, 1, rows.length + 1, 21).setBorder(true, true, true, true, true, true, "#cbd5e1", null);
+
         // 數字與狀態欄置中對齊
         sheet.getRange(3, 1, rows.length, 2).setHorizontalAlignment("center");
         sheet.getRange(3, 5, rows.length, 6).setHorizontalAlignment("center");
@@ -196,40 +246,39 @@ function doPost(e) {
       sheet.autoResizeColumns(1, 21);
       setupTransferLogsSheet(contents.transferLogs || []);
 
-      return ContentService.createTextOutput(JSON.stringify({ status: "success" }))
+      SpreadsheetApp.flush();
+
+      return ContentService.createTextOutput(JSON.stringify({ status: "success", count: rows.length }))
         .setMimeType(ContentService.MimeType.JSON);
     }
 
-    // 2. 單一班級填報即時更新
-    if (contents.action === "updateClassroom" && contents.row) {
-      var r = contents.row;
-      var data = sheet.getDataRange().getValues();
-      var found = false;
+    // 2. 單一班級填報即時更新 (支援 contents.row 或 contents.classroom)
+    if (contents.action === "updateClassroom") {
+      var rawItem = contents.row || contents.classroom;
+      if (rawItem) {
+        var rowValues = formatRow(rawItem);
+        ensureCapacity(sheet, sheet.getLastRow() + 5, 22);
+        var data = sheet.getDataRange().getValues();
+        var found = false;
 
-      var rowValues = [
-        r.id, r.floor, r.name, r.teacher, r.extension, r.studentCount || 0,
-        r.reportedStatus, r.auditResult,
-        r.totalDesks, r.deskDiffText, r.deskListText,
-        r.totalChairs, r.chairDiffText, r.chairListText,
-        r.surplusItemsText, r.shortageItemsText, r.exchangeNeedText,
-        r.logisticsPlanText, r.logisticsStatusText, r.note, r.lastUpdated
-      ];
-
-      for (var i = 2; i < data.length; i++) {
-        if (data[i][0] == r.id) {
-          var rowIdx = i + 1;
-          sheet.getRange(rowIdx, 1, 1, 21).setValues([rowValues])
-            .setVerticalAlignment("middle");
-          sheet.getRange(rowIdx, 11, 1, 1).setWrap(true);
-          sheet.getRange(rowIdx, 14, 1, 7).setWrap(true);
-          found = true;
-          break;
+        for (var i = 2; i < data.length; i++) {
+          if (data[i][0] == (rawItem.id || rowValues[0])) {
+            var rowIdx = i + 1;
+            sheet.getRange(rowIdx, 1, 1, 21).setValues([rowValues])
+              .setVerticalAlignment("middle");
+            sheet.getRange(rowIdx, 11, 1, 1).setWrap(true);
+            sheet.getRange(rowIdx, 14, 1, 7).setWrap(true);
+            found = true;
+            break;
+          }
         }
-      }
 
-      if (!found) {
-        if (sheet.getLastRow() < 2) setupMainHeader();
-        sheet.appendRow(rowValues);
+        if (!found) {
+          if (sheet.getLastRow() < 2) setupMainHeader();
+          ensureCapacity(sheet, sheet.getLastRow() + 2, 22);
+          sheet.appendRow(rowValues);
+        }
+        SpreadsheetApp.flush();
       }
     }
 
