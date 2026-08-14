@@ -152,13 +152,16 @@ export function App() {
     }
   };
 
-  const handleSyncToSheet = async (): Promise<boolean> => {
+  const pushAllToSheet = async (
+    targetClassrooms: Classroom[] = classrooms,
+    targetLogs: TransferLog[] = transferLogs
+  ): Promise<boolean> => {
     const url = (webAppUrl || DEFAULT_GOOGLE_APPS_SCRIPT_URL).trim();
     if (!url) return false;
     setIsSyncing(true);
 
     try {
-      const rows = classrooms.map(c => transformClassroomToSheetRow(c));
+      const rows = targetClassrooms.map(c => transformClassroomToSheetRow(c));
       await fetch(url, {
         method: 'POST',
         mode: 'no-cors',
@@ -166,8 +169,8 @@ export function App() {
         body: JSON.stringify({
           action: 'syncAll',
           rows,
-          classrooms,
-          transferLogs
+          classrooms: targetClassrooms,
+          transferLogs: targetLogs
         })
       });
       const timeStr = new Date().toLocaleTimeString('zh-TW', { hour: '2-digit', minute: '2-digit' });
@@ -179,6 +182,10 @@ export function App() {
       setIsSyncing(false);
       return false;
     }
+  };
+
+  const handleSyncToSheet = async (): Promise<boolean> => {
+    return pushAllToSheet(classrooms, transferLogs);
   };
 
   const handleSyncFromSheet = async (urlToUse?: string, isAutoOnLoad = false): Promise<boolean> => {
@@ -287,65 +294,71 @@ export function App() {
       note
     };
 
-    setTransferLogs(prev => [newLog, ...prev]);
+    const newLogs = [newLog, ...transferLogs];
+    setTransferLogs(newLogs);
 
     // Adjust quantities in source and destination classrooms
-    setClassrooms(prev =>
-      prev.map(c => {
-        if (c.id === fromClassId) {
-          let updated: Classroom;
-          if (itemType === 'desk') {
-            const updatedDesks = c.deskEntries.map(d =>
-              d.model === model ? { ...d, quantity: Math.max(0, d.quantity - quantity) } : d
-            );
-            updated = { ...c, deskEntries: updatedDesks };
-          } else {
-            const updatedChairs = c.chairEntries.map(ch =>
-              ch.model === model ? { ...ch, quantity: Math.max(0, ch.quantity - quantity) } : ch
-            );
-            updated = { ...c, chairEntries: updatedChairs };
-          }
-          if (webAppUrl) pushClassroomToSheet(updated);
-          return updated;
+    const newClassrooms = classrooms.map(c => {
+      if (c.id === fromClassId) {
+        let updated: Classroom;
+        if (itemType === 'desk') {
+          const updatedDesks = c.deskEntries.map(d =>
+            d.model === model ? { ...d, quantity: Math.max(0, d.quantity - quantity) } : d
+          );
+          updated = { ...c, deskEntries: updatedDesks };
+        } else {
+          const updatedChairs = c.chairEntries.map(ch =>
+            ch.model === model ? { ...ch, quantity: Math.max(0, ch.quantity - quantity) } : ch
+          );
+          updated = { ...c, chairEntries: updatedChairs };
         }
+        return updated;
+      }
 
-        if (c.id === toClassId) {
-          let updated: Classroom;
-          if (itemType === 'desk') {
-            const existing = c.deskEntries.find(d => d.model === model);
-            let updatedDesks;
-            if (existing) {
-              updatedDesks = c.deskEntries.map(d =>
-                d.model === model ? { ...d, quantity: d.quantity + quantity } : d
-              );
-            } else {
-              updatedDesks = [...c.deskEntries, { model, quantity }];
-            }
-            updated = { ...c, deskEntries: updatedDesks };
+      if (c.id === toClassId) {
+        let updated: Classroom;
+        if (itemType === 'desk') {
+          const existing = c.deskEntries.find(d => d.model === model);
+          let updatedDesks;
+          if (existing) {
+            updatedDesks = c.deskEntries.map(d =>
+              d.model === model ? { ...d, quantity: d.quantity + quantity } : d
+            );
           } else {
-            const existing = c.chairEntries.find(ch => ch.model === model);
-            let updatedChairs;
-            if (existing) {
-              updatedChairs = c.chairEntries.map(ch =>
-                ch.model === model ? { ...ch, quantity: ch.quantity + quantity } : ch
-              );
-            } else {
-              updatedChairs = [...c.chairEntries, { model, quantity }];
-            }
-            updated = { ...c, chairEntries: updatedChairs };
+            updatedDesks = [...c.deskEntries, { model, quantity }];
           }
-          if (webAppUrl) pushClassroomToSheet(updated);
-          return updated;
+          updated = { ...c, deskEntries: updatedDesks };
+        } else {
+          const existing = c.chairEntries.find(ch => ch.model === model);
+          let updatedChairs;
+          if (existing) {
+            updatedChairs = c.chairEntries.map(ch =>
+              ch.model === model ? { ...ch, quantity: ch.quantity + quantity } : ch
+            );
+          } else {
+            updatedChairs = [...c.chairEntries, { model, quantity }];
+          }
+          updated = { ...c, chairEntries: updatedChairs };
         }
+        return updated;
+      }
 
-        return c;
-      })
-    );
+      return c;
+    });
+
+    setClassrooms(newClassrooms);
+    if (webAppUrl) {
+      pushAllToSheet(newClassrooms, newLogs);
+    }
   };
 
   // Handler: Delete or Revert Transfer
   const handleDeleteTransferLog = (logId: string) => {
-    setTransferLogs(prev => prev.filter(l => l.id !== logId));
+    const newLogs = transferLogs.filter(l => l.id !== logId);
+    setTransferLogs(newLogs);
+    if (webAppUrl) {
+      pushAllToSheet(classrooms, newLogs);
+    }
   };
 
   // Handler: Password Request before Opening Google Sheet Config
@@ -364,7 +377,7 @@ export function App() {
       isOpen: true,
       title: '重新歸零 (重置全校資料)',
       description: '將所有班級清點紀錄與調配資料重置屬於高風險操作，請輸入管理員密碼 (admin)：',
-      onSuccess: () => {
+      onSuccess: async () => {
         setClassrooms(INITIAL_CLASSROOMS);
         setTransferLogs(INITIAL_TRANSFER_LOGS);
         localStorage.removeItem(LOCAL_STORAGE_KEY);
@@ -372,7 +385,15 @@ export function App() {
         localStorage.removeItem('qingshan_desk_inventory_v1');
         localStorage.removeItem('qingshan_desk_inventory_v2');
         localStorage.removeItem('qingshan_desk_logs_v1');
-        showToast('🔄 全校班級填報紀錄與調配資料已成功重新歸零！');
+
+        // Immediately push clean initial state to Google Sheet cloud database
+        showToast('🔄 正在同步將雲端 Google Sheet 資料庫重設歸零...');
+        const ok = await pushAllToSheet(INITIAL_CLASSROOMS, INITIAL_TRANSFER_LOGS);
+        if (ok) {
+          showToast('✅ 全校班級填報與調配紀錄已重新歸零，Google Sheet 雲端資料庫亦已同步重設清空！');
+        } else {
+          showToast('⚠️ 本地資料已歸零，但同步至雲端失敗，請確認網路連線。');
+        }
       }
     });
   };
