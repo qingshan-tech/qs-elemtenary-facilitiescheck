@@ -25,15 +25,26 @@ export interface ChairEntry {
   quantity: number;
 }
 
+export interface ExchangeItem {
+  id?: string;
+  type: 'desk' | 'chair';       // 物品類別：桌子 或 椅子
+  model: string;                // 欲更換之目標型號 (如 '#130', '#140', '#140-#150')
+  quantity: number;             // 需求張數
+  currentModel?: string;        // 原有釋出型號 (選填)
+}
+
 export interface ExchangeNeed {
   hasNeed: boolean;             // 是否有換型號/調配需求
-  deskExchangeNeeded?: boolean; // 桌子是否需要換型號
-  targetDeskModel?: string;     // 想更換成的桌子型號
-  targetDeskQuantity?: number;  // 想更換成的桌子張數
-  chairExchangeNeeded?: boolean;// 椅子是否需要換型號
-  targetChairModel?: string;    // 想更換成的椅子型號
-  targetChairQuantity?: number; // 想更換成的椅子張數
+  items?: ExchangeItem[];       // 多筆更換型號需求明細清單 (支援多個型號需求)
   reason?: string;              // 換型號/調配原因說明
+  
+  // 保留舊版相容性欄位
+  deskExchangeNeeded?: boolean;
+  targetDeskModel?: string;
+  targetDeskQuantity?: number;
+  chairExchangeNeeded?: boolean;
+  targetChairModel?: string;
+  targetChairQuantity?: number;
 }
 
 export interface Classroom {

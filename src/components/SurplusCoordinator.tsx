@@ -417,11 +417,20 @@ export const SurplusCoordinator: React.FC<Props> = ({
                           缺椅子 {Math.abs(st.chairDifference)} 張
                         </span>
                       )}
-                      {ex?.hasNeed && (
-                        <span className="px-2 py-0.5 bg-amber-600 text-white font-bold rounded">
-                          🏷️ 欲換型號: {ex.deskExchangeNeeded ? `桌${ex.targetDeskModel}x${ex.targetDeskQuantity} ` : ''}{ex.chairExchangeNeeded ? `椅${ex.targetChairModel}x${ex.targetChairQuantity}` : ''}
-                        </span>
-                      )}
+                      {ex?.hasNeed && (() => {
+                        const items = ex.items && ex.items.length > 0
+                          ? ex.items
+                          : [
+                              ...(ex.deskExchangeNeeded ? [{ type: 'desk' as const, model: ex.targetDeskModel || '#130', quantity: ex.targetDeskQuantity || 1 }] : []),
+                              ...(ex.chairExchangeNeeded ? [{ type: 'chair' as const, model: ex.targetChairModel || '#125-#135', quantity: ex.targetChairQuantity || 1 }] : [])
+                            ];
+                        const text = items.map(i => `${i.type === 'desk' ? '桌' : '椅'}${i.model}x${i.quantity}`).join('、');
+                        return (
+                          <span className="px-2 py-0.5 bg-amber-600 text-white font-bold rounded">
+                            🏷️ 欲換型號: {text}
+                          </span>
+                        );
+                      })()}
                     </div>
 
                     {ex?.reason && (

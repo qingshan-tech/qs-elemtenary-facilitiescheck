@@ -124,51 +124,52 @@ export const ClassDetailModal: React.FC<Props> = ({
                 </span>
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
-                {/* Desk Exchange Need */}
-                <div className="p-3 bg-white/90 border border-amber-200 rounded-xl space-y-1">
-                  <div className="text-amber-900 font-bold text-xs flex items-center gap-1">
-                    <span>🪑 桌子更換需求：</span>
-                    {ex?.deskExchangeNeeded ? (
-                      <span className="text-amber-700 font-semibold">有更換需求</span>
-                    ) : (
-                      <span className="text-slate-400 font-normal">不需要更換</span>
-                    )}
-                  </div>
-                  {ex?.deskExchangeNeeded && (
-                    <div className="text-slate-800 font-medium pl-2 pt-1">
-                      希望能更換成：<strong className="text-indigo-700 font-mono text-sm">型號 {ex.targetDeskModel}</strong>
-                      <span className="ml-2 font-bold text-slate-900 bg-amber-100 px-1.5 py-0.5 rounded">
-                        x {ex.targetDeskQuantity} 張
-                      </span>
-                    </div>
-                  )}
-                </div>
+              {/* Multi-item Exchange List */}
+              {(() => {
+                const items = ex?.items && ex.items.length > 0
+                  ? ex.items
+                  : [
+                      ...(ex?.deskExchangeNeeded ? [{ type: 'desk' as const, model: ex.targetDeskModel || '#130', quantity: ex.targetDeskQuantity || 1 }] : []),
+                      ...(ex?.chairExchangeNeeded ? [{ type: 'chair' as const, model: ex.targetChairModel || '#125-#135', quantity: ex.targetChairQuantity || 1 }] : [])
+                    ];
 
-                {/* Chair Exchange Need */}
-                <div className="p-3 bg-white/90 border border-amber-200 rounded-xl space-y-1">
-                  <div className="text-amber-900 font-bold text-xs flex items-center gap-1">
-                    <span>𒒺 椅子更換需求：</span>
-                    {ex?.chairExchangeNeeded ? (
-                      <span className="text-amber-700 font-semibold">有更換需求</span>
-                    ) : (
-                      <span className="text-slate-400 font-normal">不需要更換</span>
-                    )}
-                  </div>
-                  {ex?.chairExchangeNeeded && (
-                    <div className="text-slate-800 font-medium pl-2 pt-1">
-                      希望能更換成：<strong className="text-indigo-700 font-mono text-sm">型號 {ex.targetChairModel}</strong>
-                      <span className="ml-2 font-bold text-slate-900 bg-amber-100 px-1.5 py-0.5 rounded">
-                        x {ex.targetChairQuantity} 張
-                      </span>
+                return (
+                  <div className="space-y-2 pt-1">
+                    <div className="text-[11px] font-bold text-amber-900">
+                      欲更換型號明細清單 (共 {items.reduce((s, i) => s + (i.quantity || 0), 0)} 張)：
                     </div>
-                  )}
-                </div>
-              </div>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                      {items.map((item, idx) => (
+                        <div
+                          key={idx}
+                          className={`p-2.5 bg-white/95 border rounded-xl flex items-center justify-between gap-2 shadow-2xs ${
+                            item.type === 'desk' ? 'border-amber-200' : 'border-indigo-200'
+                          }`}
+                        >
+                          <div className="flex items-center gap-2">
+                            <span className="px-1.5 py-0.5 rounded text-[11px] font-bold bg-slate-100 text-slate-700">
+                              {item.type === 'desk' ? '🪑 桌子' : '𒒺 椅子'}
+                            </span>
+                            <div>
+                              <span className="text-slate-500 text-[11px]">換成：</span>
+                              <strong className="text-indigo-700 font-mono text-xs ml-1">
+                                型號 {item.model}
+                              </strong>
+                            </div>
+                          </div>
+                          <span className="font-bold text-amber-950 bg-amber-100 border border-amber-200 px-2 py-0.5 rounded-lg text-xs font-mono">
+                            x {item.quantity} 張
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                );
+              })()}
 
               {/* Reason / Note */}
               {ex?.reason && (
-                <div className="p-2.5 bg-white/80 border border-amber-200 rounded-xl text-slate-700 text-xs">
+                <div className="p-2.5 bg-white/90 border border-amber-200 rounded-xl text-slate-700 text-xs">
                   <strong className="text-amber-950 font-bold">調配說明原因：</strong>
                   <span>{ex.reason}</span>
                 </div>

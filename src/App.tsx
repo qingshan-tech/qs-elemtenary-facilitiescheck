@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Classroom, TransferLog } from './types';
-import { INITIAL_CLASSROOMS, INITIAL_TRANSFER_LOGS } from './data/initialData';
-import { transformClassroomToSheetRow } from './utils/sheetUtils';
+import { INITIAL_CLASSROOMS, INITIAL_TRANSFER_LOGS, DEFAULT_GOOGLE_APPS_SCRIPT_URL } from './data/initialData';
+import { transformClassroomToSheetRow, mergeCloudClassrooms } from './utils/sheetUtils';
 import { Header } from './components/Header';
 import { FloorFilter } from './components/FloorFilter';
 import { ClassCard } from './components/ClassCard';
@@ -60,9 +60,9 @@ export function App() {
     return INITIAL_TRANSFER_LOGS;
   });
 
-  // Google Sheet Web App Endpoint state
+  // Google Sheet Web App Endpoint state (defaults to Qingshan default database endpoint)
   const [webAppUrl, setWebAppUrl] = useState<string>(() => {
-    return localStorage.getItem(LOCAL_STORAGE_WEBAPP_KEY) || '';
+    return localStorage.getItem(LOCAL_STORAGE_WEBAPP_KEY) || DEFAULT_GOOGLE_APPS_SCRIPT_URL;
   });
 
   const [isSyncing, setIsSyncing] = useState<boolean>(false);
@@ -120,20 +120,30 @@ export function App() {
     }
   }, [webAppUrl]);
 
-  // Push Data to Google Sheet Database
+  // Read latest records from Google Sheet database on startup across all devices/teachers
+  useEffect(() => {
+    const targetUrl = webAppUrl || DEFAULT_GOOGLE_APPS_SCRIPT_URL;
+    if (targetUrl) {
+      handleSyncFromSheet(targetUrl, true);
+    }
+  }, []);
+
+  // Push Single Classroom Data to Google Sheet Database
   const pushClassroomToSheet = async (classroom: Classroom) => {
-    if (!webAppUrl.trim()) return;
+    const url = (webAppUrl || DEFAULT_GOOGLE_APPS_SCRIPT_URL).trim();
+    if (!url) return;
 
     try {
       const row = transformClassroomToSheetRow(classroom);
-      await fetch(webAppUrl, {
+      await fetch(url, {
         method: 'POST',
         mode: 'no-cors',
         headers: { 'Content-Type': 'text/plain;charset=utf-8' },
         body: JSON.stringify({
           action: 'updateClassroom',
           row,
-          classroom
+          classroom,
+          classrooms: classrooms.map(c => c.id === classroom.id ? classroom : c)
         })
       });
       setLastSyncTime(new Date().toLocaleTimeString('zh-TW', { hour: '2-digit', minute: '2-digit' }));
@@ -143,12 +153,13 @@ export function App() {
   };
 
   const handleSyncToSheet = async (): Promise<boolean> => {
-    if (!webAppUrl.trim()) return false;
+    const url = (webAppUrl || DEFAULT_GOOGLE_APPS_SCRIPT_URL).trim();
+    if (!url) return false;
     setIsSyncing(true);
 
     try {
       const rows = classrooms.map(c => transformClassroomToSheetRow(c));
-      await fetch(webAppUrl, {
+      await fetch(url, {
         method: 'POST',
         mode: 'no-cors',
         headers: { 'Content-Type': 'text/plain;charset=utf-8' },
@@ -159,7 +170,8 @@ export function App() {
           transferLogs
         })
       });
-      setLastSyncTime(new Date().toLocaleTimeString('zh-TW', { hour: '2-digit', minute: '2-digit' }));
+      const timeStr = new Date().toLocaleTimeString('zh-TW', { hour: '2-digit', minute: '2-digit' });
+      setLastSyncTime(timeStr);
       setIsSyncing(false);
       return true;
     } catch (err) {
@@ -169,22 +181,46 @@ export function App() {
     }
   };
 
-  const handleSyncFromSheet = async (): Promise<boolean> => {
-    if (!webAppUrl.trim()) return false;
+  const handleSyncFromSheet = async (urlToUse?: string, isAutoOnLoad = false): Promise<boolean> => {
+    const url = (urlToUse || webAppUrl || DEFAULT_GOOGLE_APPS_SCRIPT_URL).trim();
+    if (!url) return false;
     setIsSyncing(true);
 
     try {
-      const res = await fetch(webAppUrl);
+      const fetchUrl = url.includes('?') ? `${url}&_t=${Date.now()}` : `${url}?_t=${Date.now()}`;
+      const res = await fetch(fetchUrl);
+      if (!res.ok) throw new Error(`HTTP error ${res.status}`);
       const json = await res.json();
-      if (json && json.data) {
-        // Parse rows from sheet if structured
-        setLastSyncTime(new Date().toLocaleTimeString('zh-TW', { hour: '2-digit', minute: '2-digit' }));
+      
+      const { merged, updatedCount, transferLogs: cloudLogs } = mergeCloudClassrooms(classrooms, json);
+      
+      if (updatedCount > 0) {
+        setClassrooms(merged);
+        if (cloudLogs && Array.isArray(cloudLogs)) {
+          setTransferLogs(cloudLogs);
+        }
+        const timeStr = new Date().toLocaleTimeString('zh-TW', { hour: '2-digit', minute: '2-digit' });
+        setLastSyncTime(timeStr);
+        if (isAutoOnLoad) {
+          showToast('📡 已自動連線青山雲端資料庫，成功載入最新盤點紀錄！');
+        } else {
+          showToast('✅ 已成功從 Google Sheet 雲端資料庫載入最新資料！');
+        }
+      } else {
+        const timeStr = new Date().toLocaleTimeString('zh-TW', { hour: '2-digit', minute: '2-digit' });
+        setLastSyncTime(timeStr);
+        if (!isAutoOnLoad) {
+          showToast('📡 已連線青山雲端資料庫 (目前資料與雲端一致)');
+        }
       }
       setIsSyncing(false);
       return true;
     } catch (err) {
-      console.error('Sync from sheet failed:', err);
+      console.warn('Sync from Google Sheet failed (may be offline or CORS during direct get):', err);
       setIsSyncing(false);
+      if (!isAutoOnLoad) {
+        showToast('⚠️ 連線 Google Sheet 失敗，請確認網路或試算表設定');
+      }
       return false;
     }
   };
@@ -360,6 +396,9 @@ export function App() {
         totalClassrooms={classrooms.length}
         reportedCount={reportedCount}
         isSheetConnected={Boolean(webAppUrl)}
+        onSyncCloud={() => handleSyncFromSheet(webAppUrl, false)}
+        isSyncing={isSyncing}
+        lastSyncTime={lastSyncTime}
       />
 
       {/* Primary Workspace Body */}

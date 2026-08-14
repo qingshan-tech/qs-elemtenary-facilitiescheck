@@ -107,7 +107,7 @@ export function getShortageItemsText(c: Classroom, st: InventoryStatus): string 
 }
 
 /**
- * 取得換型號 / 特殊調配需求文字
+ * 取得換型號 / 特殊調配需求文字 (支援多個型號需求)
  */
 export function getExchangeNeedText(c: Classroom): string {
   if (!c.reported) return '尚未填報';
@@ -116,18 +116,32 @@ export function getExchangeNeedText(c: Classroom): string {
   }
 
   const ex = c.exchangeNeed;
-  const parts: string[] = [];
-  if (ex.deskExchangeNeeded) {
-    parts.push(`欲換桌子: 型號 ${ex.targetDeskModel || '指定型號'} x ${ex.targetDeskQuantity || 1}張`);
-  }
-  if (ex.chairExchangeNeeded) {
-    parts.push(`欲換椅子: 型號 ${ex.targetChairModel || '指定型號'} x ${ex.targetChairQuantity || 1}張`);
-  }
-  if (ex.reason) {
-    parts.push(`(原因: ${ex.reason})`);
+  const items = ex.items && ex.items.length > 0
+    ? ex.items
+    : [
+        ...(ex.deskExchangeNeeded ? [{ type: 'desk' as const, model: ex.targetDeskModel || '#130', quantity: ex.targetDeskQuantity || 1 }] : []),
+        ...(ex.chairExchangeNeeded ? [{ type: 'chair' as const, model: ex.targetChairModel || '#125-#135', quantity: ex.targetChairQuantity || 1 }] : [])
+      ];
+
+  if (items.length === 0) {
+    return '型號相符 (無換型號需求)';
   }
 
-  return parts.length > 0 ? `🏷️ 需更換型號: ${parts.join(' ; ')}` : '型號相符 (無換型號需求)';
+  const deskItems = items.filter(i => i.type === 'desk');
+  const chairItems = items.filter(i => i.type === 'chair');
+
+  const parts: string[] = [];
+  if (deskItems.length > 0) {
+    parts.push(`換桌: ${deskItems.map(d => `${d.model} x ${d.quantity}張`).join('、')}`);
+  }
+  if (chairItems.length > 0) {
+    parts.push(`換椅: ${chairItems.map(ch => `${ch.model} x ${ch.quantity}張`).join('、')}`);
+  }
+  if (ex.reason) {
+    parts.push(`[原因: ${ex.reason}]`);
+  }
+
+  return parts.length > 0 ? `🏷️ 需換型號: ${parts.join(' ； ')}` : '型號相符 (無換型號需求)';
 }
 
 /**
@@ -155,13 +169,20 @@ export function getLogisticsPlanText(c: Classroom, st: InventoryStatus): string 
     tasks.push(`【可調出搬移】有多餘${surplusDesc.join('、')}可搬移支援他班`);
   }
 
-  // 3. 換型號特殊調配
+  // 3. 換型號特殊調配 (支援多個型號需求)
   if (c.exchangeNeed?.hasNeed) {
     const ex = c.exchangeNeed;
-    const exItems = [];
-    if (ex.deskExchangeNeeded) exItems.push(`桌${ex.targetDeskModel}x${ex.targetDeskQuantity}張`);
-    if (ex.chairExchangeNeeded) exItems.push(`椅${ex.targetChairModel}x${ex.targetChairQuantity}張`);
-    tasks.push(`【換型號調配】需對調更換${exItems.join('、')}`);
+    const items = ex.items && ex.items.length > 0
+      ? ex.items
+      : [
+          ...(ex.deskExchangeNeeded ? [{ type: 'desk' as const, model: ex.targetDeskModel || '#130', quantity: ex.targetDeskQuantity || 1 }] : []),
+          ...(ex.chairExchangeNeeded ? [{ type: 'chair' as const, model: ex.targetChairModel || '#125-#135', quantity: ex.targetChairQuantity || 1 }] : [])
+        ];
+
+    if (items.length > 0) {
+      const summary = items.map(i => `${i.type === 'desk' ? '桌' : '椅'}${i.model} x ${i.quantity}張`).join('、');
+      tasks.push(`【換型號調配】需對調更換 ${summary}`);
+    }
   }
 
   if (tasks.length === 0) {
@@ -218,3 +239,101 @@ export function transformClassroomToSheetRow(c: Classroom): ClassroomSheetRow {
     lastUpdated: c.lastUpdated || (c.reported ? new Date().toLocaleString('zh-TW') : '')
   };
 }
+
+/**
+ * 將從 Google Apps Script 雲端資料庫抓取的資料進行解析並整併至現有班級清單
+ */
+export function mergeCloudClassrooms(
+  localClassrooms: Classroom[],
+  cloudData: any
+): { merged: Classroom[]; updatedCount: number; transferLogs?: TransferLog[] } {
+  if (!cloudData) {
+    return { merged: localClassrooms, updatedCount: 0 };
+  }
+
+  // 情況 1: 直接回傳 classrooms 陣列 (精確度最高，包含完整 deskEntries / exchangeItems)
+  const incomingClassrooms: Classroom[] = Array.isArray(cloudData.classrooms)
+    ? cloudData.classrooms
+    : Array.isArray(cloudData)
+    ? cloudData
+    : [];
+
+  const incomingLogs: TransferLog[] | undefined = Array.isArray(cloudData.transferLogs)
+    ? cloudData.transferLogs
+    : undefined;
+
+  if (incomingClassrooms.length > 0) {
+    let updatedCount = 0;
+    const cloudMap = new Map<string, Classroom>();
+    incomingClassrooms.forEach(c => {
+      if (c && c.id) cloudMap.set(String(c.id).trim(), c);
+    });
+
+    const merged = localClassrooms.map(local => {
+      const cloud = cloudMap.get(String(local.id).trim());
+      if (cloud) {
+        updatedCount++;
+        return {
+          ...local,
+          ...cloud,
+          // 保留未填報狀態的乾淨預設值
+          studentCount: typeof cloud.studentCount === 'number' ? cloud.studentCount : local.studentCount,
+          deskEntries: Array.isArray(cloud.deskEntries) ? cloud.deskEntries : local.deskEntries,
+          chairEntries: Array.isArray(cloud.chairEntries) ? cloud.chairEntries : local.chairEntries,
+          exchangeNeed: cloud.exchangeNeed || local.exchangeNeed,
+          reported: Boolean(cloud.reported),
+          isCompleted: Boolean(cloud.isCompleted)
+        };
+      }
+      return local;
+    });
+
+    return { merged, updatedCount, transferLogs: incomingLogs };
+  }
+
+  // 情況 2: 從 Sheet 二維陣列 (rows: [["班級代號", ...], ...]) 解析
+  const rows: any[][] = Array.isArray(cloudData.rows)
+    ? cloudData.rows
+    : Array.isArray(cloudData.data)
+    ? cloudData.data
+    : [];
+
+  if (rows.length > 2) {
+    let updatedCount = 0;
+    const rowMap = new Map<string, any[]>();
+    for (let i = 2; i < rows.length; i++) {
+      const row = rows[i];
+      if (row && row[0]) {
+        rowMap.set(String(row[0]).trim(), row);
+      }
+    }
+
+    const merged = localClassrooms.map(local => {
+      const row = rowMap.get(String(local.id).trim());
+      if (row) {
+        updatedCount++;
+        const studentCount = parseInt(row[5], 10) || local.studentCount;
+        const reportedStr = String(row[6] || '');
+        const isReported = reportedStr.includes('已填報') || studentCount > 0;
+        const isCompleted = String(row[18] || '').includes('已完成');
+        const note = String(row[19] || '');
+        const lastUpdated = String(row[20] || '');
+
+        return {
+          ...local,
+          studentCount,
+          reported: isReported,
+          isCompleted,
+          note: note || local.note,
+          lastUpdated: lastUpdated || local.lastUpdated
+        };
+      }
+      return local;
+    });
+
+    return { merged, updatedCount, transferLogs: incomingLogs };
+  }
+
+  return { merged: localClassrooms, updatedCount: 0, transferLogs: incomingLogs };
+}
+

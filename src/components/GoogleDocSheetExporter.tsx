@@ -53,6 +53,32 @@ export const GoogleDocSheetExporter: React.FC<Props> = ({ classrooms, transferLo
   // Transform all classrooms into structured 21-column sheet rows
   const sheetRows: ClassroomSheetRow[] = classrooms.map(c => transformClassroomToSheetRow(c));
 
+  // Extract all exchange items across school for project breakdown
+  const allExchangeRequests = classrooms.flatMap(c => {
+    if (!c.reported || !c.exchangeNeed?.hasNeed) return [];
+    const ex = c.exchangeNeed;
+    const items = ex.items && ex.items.length > 0
+      ? ex.items
+      : [
+          ...(ex.deskExchangeNeeded ? [{ type: 'desk' as const, model: ex.targetDeskModel || '#130', quantity: ex.targetDeskQuantity || 1 }] : []),
+          ...(ex.chairExchangeNeeded ? [{ type: 'chair' as const, model: ex.targetChairModel || '#125-#135', quantity: ex.targetChairQuantity || 1 }] : [])
+        ];
+    return items.map((item, idx) => ({
+      key: `${c.id}-${idx}`,
+      classId: c.id,
+      floor: c.floor,
+      className: c.name,
+      teacher: c.teacher,
+      extension: c.extension,
+      typeText: item.type === 'desk' ? '🪑 桌子' : '𒒺 椅子',
+      rawType: item.type,
+      model: item.model,
+      quantity: item.quantity,
+      reason: ex.reason || c.note || '依導師登記需求更換',
+      isCompleted: c.isCompleted
+    }));
+  });
+
   // Generate HTML for Google Doc / Clipboard
   const generateDocHTML = () => {
     const today = new Date().toLocaleDateString('zh-TW', {
@@ -103,7 +129,7 @@ export const GoogleDocSheetExporter: React.FC<Props> = ({ classrooms, transferLo
     <tr>
       <td><strong>多餘桌子總數：</strong><span style="color: #2563eb; font-weight: bold;">${totalDeskSurplus} 張</span></td>
       <td><strong>多餘椅子總數：</strong><span style="color: #2563eb; font-weight: bold;">${totalChairSurplus} 張</span></td>
-      <td><strong>調查承辦單位：</strong>總務處</td>
+      <td><strong>換型號需求總計：</strong><span style="color: #b45309; font-weight: bold;">${allExchangeRequests.reduce((s, r) => s + r.quantity, 0)} 張 (${allExchangeRequests.length} 筆)</span></td>
     </tr>
   </table>
 </div>
@@ -149,8 +175,40 @@ export const GoogleDocSheetExporter: React.FC<Props> = ({ classrooms, transferLo
   </tbody>
 </table>
 
+${allExchangeRequests.length > 0 ? `
+<h3>【貳、全校各班【換型號／特殊調配需求】派工專案清單】</h3>
+<table class="main-table">
+  <thead>
+    <tr style="background-color: #92400e;">
+      <th style="width: 6%;">樓層</th>
+      <th style="width: 10%;">班級名稱</th>
+      <th style="width: 12%;">導師姓名(分機)</th>
+      <th style="width: 10%;">需求類別</th>
+      <th style="width: 12%;">指定欲換型號</th>
+      <th style="width: 10%;">需求張數</th>
+      <th style="width: 12%;">調配狀態</th>
+      <th style="width: 28%;">導師原因說明與備註</th>
+    </tr>
+  </thead>
+  <tbody>
+    ${allExchangeRequests.map(ex => `
+      <tr>
+        <td style="text-align: center; font-weight: bold;">${ex.floor}</td>
+        <td><strong>${ex.className}</strong></td>
+        <td>${ex.teacher} (${ex.extension})</td>
+        <td style="text-align: center;">${ex.typeText}</td>
+        <td style="text-align: center; font-weight: bold; color: #1e40af;">型號 ${ex.model}</td>
+        <td style="text-align: center; font-weight: bold; color: #92400e;">${ex.quantity} 張</td>
+        <td style="text-align: center;">${ex.isCompleted ? '<span class="tag-ok">已完成調配</span>' : '<span class="tag-exchange">待總務處撥補</span>'}</td>
+        <td>${ex.reason}</td>
+      </tr>
+    `).join('')}
+  </tbody>
+</table>
+` : ''}
+
 ${transferLogs.length > 0 ? `
-<h3>【貳、課桌椅跨班調配與搬運派工明細清單】</h3>
+<h3>【參、課桌椅跨班調配與搬運派工明細清單】</h3>
 <table class="main-table">
   <thead>
     <tr style="background-color: #065f46;">
@@ -230,6 +288,15 @@ ${transferLogs.length > 0 ? `
 
     let csvContent = [title, headers, ...rows].map(row => row.map(v => `"${v}"`).join(',')).join('\n');
 
+    if (allExchangeRequests.length > 0) {
+      csvContent += '\n\n';
+      csvContent += '"【全校各班【換型號／特殊調配需求】派工專案清單】"\n';
+      csvContent += '"樓層","班級名稱","導師姓名","分機","物品類別","指定欲換型號","需求數量","調配狀態","導師原因說明與備註"\n';
+      allExchangeRequests.forEach(ex => {
+        csvContent += `"${ex.floor}","${ex.className}","${ex.teacher}","${ex.extension}","${ex.typeText}","${ex.model}","${ex.quantity} 張","${ex.isCompleted ? '已完成調配' : '待總務處撥補'}","${(ex.reason || '').replace(/"/g, '""')}"\n`;
+      });
+    }
+
     if (transferLogs.length > 0) {
       csvContent += '\n\n';
       csvContent += '"【課桌椅跨班調配與搬運派工明細紀錄表】"\n';
@@ -278,7 +345,17 @@ ${transferLogs.length > 0 ? `
       r.lastUpdated
     ]);
 
-    return [title, headers, ...rows].map(row => row.join('\t')).join('\n');
+    let tsvContent = [title, headers, ...rows].map(row => row.join('\t')).join('\n');
+
+    if (allExchangeRequests.length > 0) {
+      tsvContent += '\n\n【全校各班【換型號／特殊調配需求】派工專案清單】\n';
+      tsvContent += ['樓層', '班級名稱', '導師姓名', '分機', '物品類別', '指定欲換型號', '需求數量', '調配狀態', '導師原因說明與備註'].join('\t') + '\n';
+      allExchangeRequests.forEach(ex => {
+        tsvContent += [ex.floor, ex.className, ex.teacher, ex.extension, ex.typeText, ex.model, `${ex.quantity} 張`, ex.isCompleted ? '已完成調配' : '待總務處撥補', ex.reason].join('\t') + '\n';
+      });
+    }
+
+    return tsvContent;
   };
 
   // Copy HTML for Google Doc
@@ -484,41 +561,31 @@ ${transferLogs.length > 0 ? `
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-200 font-mono text-[11px]">
-                  {sheetRows.map((r, i) => {
-                    const isAuditOk = r.auditResult.includes('完全正確');
-                    const hasShortage = r.auditResult.includes('缺');
-                    const hasSurplus = r.auditResult.includes('多');
-
-                    return (
-                      <tr key={r.id} className="hover:bg-slate-50 transition-colors">
-                        <td className="py-2 px-3 border-r border-slate-200 font-bold text-slate-900 font-sans">{r.name}</td>
-                        <td className="py-2 px-2 border-r border-slate-200 font-bold text-center text-slate-600 font-sans">{r.floor}</td>
-                        <td className="py-2 px-3 border-r border-slate-200 font-sans">{r.teacher} ({r.extension})</td>
-                        <td className="py-2 px-2.5 border-r border-slate-200 text-center font-bold text-slate-900">{r.studentCount}</td>
-                        
-                        {/* 數量審核結果 */}
-                        <td className="py-2 px-3 border-r border-slate-200 text-center font-sans">
-                          {r.reportedStatus === '待填報' ? (
-                            <span className="px-2 py-0.5 bg-slate-100 text-slate-500 rounded text-[10px]">待填報</span>
-                          ) : isAuditOk ? (
-                            <span className="px-2 py-0.5 bg-emerald-100 text-emerald-800 font-bold rounded text-[10px]">🟢 數量正確</span>
-                          ) : hasShortage ? (
-                            <span className="px-2 py-0.5 bg-rose-100 text-rose-800 font-bold rounded text-[10px]">{r.auditResult}</span>
-                          ) : (
-                            <span className="px-2 py-0.5 bg-blue-100 text-blue-800 font-bold rounded text-[10px]">{r.auditResult}</span>
-                          )}
-                        </td>
-
-                        {/* 桌子 */}
-                        <td className="py-2 px-2.5 border-r border-slate-200 text-center">{r.reportedStatus === '已填報' ? r.totalDesks : '-'}</td>
-                        <td className={`py-2 px-3 border-r border-slate-200 text-center font-bold ${
-                          r.deskDiffText.includes('缺') ? 'text-rose-600' : r.deskDiffText.includes('多') ? 'text-blue-600' : 'text-emerald-700'
+                  {sheetRows.map(r => (
+                    <tr key={r.id} className="hover:bg-slate-50 transition-colors">
+                      <td className="py-2 px-3 border-r border-slate-200 text-center font-bold text-slate-900 font-sans">{r.name}</td>
+                      <td className="py-2 px-2 border-r border-slate-200 text-center text-slate-500">{r.floor}</td>
+                      <td className="py-2 px-3 border-r border-slate-200 font-sans text-slate-700">{r.teacher} ({r.extension})</td>
+                      <td className="py-2 px-2.5 border-r border-slate-200 text-center font-bold">{r.studentCount}</td>
+                      <td className="py-2 px-3 border-r border-slate-200 text-center font-sans">
+                        <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${
+                          r.auditResult === "✅ 數量符合" ? "bg-emerald-100 text-emerald-800" :
+                          r.auditResult.includes("缺") ? "bg-rose-100 text-rose-800" :
+                          r.auditResult.includes("多") ? "bg-blue-100 text-blue-800" :
+                          "bg-slate-100 text-slate-600"
                         }`}>
-                          {r.deskDiffText}
-                        </td>
-                        <td className="py-2 px-3.5 border-r border-slate-200 font-sans">{r.deskListText}</td>
+                          {r.auditResult}
+                        </span>
+                      </td>
+                      <td className="py-2 px-2.5 border-r border-slate-200 text-center">{r.reportedStatus === "已填報" ? r.totalDesks : "-"}</td>
+                      <td className={`py-2 px-3 border-r border-slate-200 text-center font-bold ${
+                        r.deskDiffText.includes("缺") ? "text-rose-600" : r.deskDiffText.includes("多") ? "text-blue-600" : "text-emerald-700"
+                      }`}>
+                        {r.deskDiffText}
+                      </td>
+                      <td className="py-2 px-3.5 border-r border-slate-200 font-sans">{r.deskListText}</td>
 
-                        {/* 椅子 */}
+                      {/* 椅子 */}
                         <td className="py-2 px-2.5 border-r border-slate-200 text-center">{r.reportedStatus === '已填報' ? r.totalChairs : '-'}</td>
                         <td className={`py-2 px-3 border-r border-slate-200 text-center font-bold ${
                           r.chairDiffText.includes('缺') ? 'text-rose-600' : r.chairDiffText.includes('多') ? 'text-blue-600' : 'text-emerald-700'
@@ -566,8 +633,7 @@ ${transferLogs.length > 0 ? `
                         {/* 導師備註 */}
                         <td className="py-2 px-3 font-sans truncate max-w-xs text-slate-700">{r.note || '-'}</td>
                       </tr>
-                    );
-                  })}
+                    ))}
                 </tbody>
               </table>
             </div>
@@ -605,7 +671,7 @@ ${transferLogs.length > 0 ? `
                         <td className="py-1.5 px-3 font-sans font-bold text-slate-900">{l.fromClassName}</td>
                         <td className="py-1.5 px-3 font-sans font-bold text-indigo-900">{l.toClassName}</td>
                         <td className="py-1.5 px-3 font-sans">
-                          {l.type === 'desk' ? '🪑 桌子' : '💺 椅子'} - 型號 <strong className="text-emerald-800">{l.model}</strong>
+                          {l.type === 'desk' ? '🪑 桌子' : '𒒺 椅子'} - 型號 <strong className="text-emerald-800">{l.model}</strong>
                         </td>
                         <td className="py-1.5 px-3 text-center font-bold text-emerald-900">{l.quantity} 張</td>
                         <td className="py-1.5 px-3 text-center font-sans">
@@ -616,6 +682,59 @@ ${transferLogs.length > 0 ? `
                           )}
                         </td>
                         <td className="py-1.5 px-3 font-sans text-slate-600">{l.note || '-'}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+
+          {/* Exchange Requests Project Sub-Table Preview */}
+          {allExchangeRequests.length > 0 && (
+            <div className="border border-amber-300 rounded-xl overflow-hidden shadow-2xs">
+              <div className="bg-amber-900 text-white px-4 py-3 font-bold text-xs flex items-center justify-between">
+                <span className="flex items-center gap-2">
+                  <ArrowRightLeft className="w-4 h-4 text-amber-300" />
+                  <span>專案分頁預覽：【全校各班換型號特殊調配需求清單】(Model Exchange Needs)</span>
+                </span>
+                <span className="text-[11px] font-normal text-amber-200">
+                  共 {allExchangeRequests.length} 筆更換型號項目 (合計 {allExchangeRequests.reduce((s, r) => s + r.quantity, 0)} 張)
+                </span>
+              </div>
+              <div className="overflow-x-auto">
+                <table className="w-full text-left text-xs border-collapse">
+                  <thead className="bg-amber-50 text-amber-950 font-bold border-b border-amber-200">
+                    <tr>
+                      <th className="py-2 px-3 text-center">樓層</th>
+                      <th className="py-2 px-3">班級名稱</th>
+                      <th className="py-2 px-3">導師姓名(分機)</th>
+                      <th className="py-2 px-3 text-center">類別</th>
+                      <th className="py-2 px-3">指定欲換型號</th>
+                      <th className="py-2 px-3 text-center">需求張數</th>
+                      <th className="py-2 px-3 text-center">調配進度</th>
+                      <th className="py-2 px-3">導師說明原因</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-amber-100 font-sans text-[11px]">
+                    {allExchangeRequests.map(ex => (
+                      <tr key={ex.key} className="hover:bg-amber-50/50">
+                        <td className="py-1.5 px-3 text-center font-bold text-slate-700">{ex.floor}</td>
+                        <td className="py-1.5 px-3 font-bold text-slate-900">{ex.className}</td>
+                        <td className="py-1.5 px-3 text-slate-700">{ex.teacher} ({ex.extension})</td>
+                        <td className="py-1.5 px-3 text-center">{ex.typeText}</td>
+                        <td className="py-1.5 px-3 font-mono font-bold text-indigo-700">型號 {ex.model}</td>
+                        <td className="py-1.5 px-3 text-center font-bold font-mono text-amber-950 bg-amber-100/60 rounded">
+                          {ex.quantity} 張
+                        </td>
+                        <td className="py-1.5 px-3 text-center">
+                          {ex.isCompleted ? (
+                            <span className="px-2 py-0.5 bg-emerald-100 text-emerald-800 font-bold rounded text-[10px]">已完成調配</span>
+                          ) : (
+                            <span className="px-2 py-0.5 bg-amber-100 text-amber-900 font-bold rounded text-[10px]">待總務處撥補</span>
+                          )}
+                        </td>
+                        <td className="py-1.5 px-3 text-slate-600 truncate max-w-xs">{ex.reason}</td>
                       </tr>
                     ))}
                   </tbody>

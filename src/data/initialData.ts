@@ -28,6 +28,9 @@ export const CHAIR_SPECS: ChairModelSpec[] = [
   { model: '#170-#180', heightRange: '166 ~ 193', gradeRange: '國中/高中職' }
 ];
 
+// 預設固定連結的 Google Apps Script 雲端資料庫端點 (青山中小學專屬)
+export const DEFAULT_GOOGLE_APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbyWTgDUhqbPoKWSIt7xdCZGVCcHoVhw1fXMcor7DbuIyzC7Vq7vpkS3zFa0IoxNIt7t/exec';
+
 // 新北市立青山國民中小學 115學年度國小部班級預設清單 (全數設定為待填報，零人工造假數據)
 export const INITIAL_CLASSROOMS: Classroom[] = [
   // 1F
