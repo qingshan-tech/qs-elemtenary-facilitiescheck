@@ -1,4 +1,4 @@
-import { Classroom, InventoryStatus, TransferLog } from '../types';
+import { Classroom, InventoryStatus, TransferLog, ExchangeNeed, ExchangeItem } from '../types';
 import { calculateInventoryStatus } from '../data/initialData';
 
 export interface ClassroomSheetRow {
@@ -241,6 +241,124 @@ export function transformClassroomToSheetRow(c: Classroom): ClassroomSheetRow {
 }
 
 /**
+ * 解析 Google Sheet 中的型號明細文字 (例如: "型號 #125: 35張 ; 型號 #140: 2張")
+ */
+export function parseModelEntries(
+  text: string,
+  totalFallback = 0,
+  defaultModel = '#125-#135'
+): { model: string; quantity: number }[] {
+  if (!text || typeof text !== 'string') {
+    return totalFallback > 0 ? [{ model: defaultModel, quantity: totalFallback }] : [];
+  }
+
+  const clean = text.trim();
+  if (
+    clean.includes('尚未填報') ||
+    clean.includes('無桌子') ||
+    clean.includes('無椅子') ||
+    clean === '0張' ||
+    clean === '0' ||
+    clean === '-'
+  ) {
+    return totalFallback > 0 ? [{ model: defaultModel, quantity: totalFallback }] : [];
+  }
+
+  // 分隔符號支援 ; 、 ； 、 換行 、 逗號
+  const parts = clean.split(/[;；\n,]+/).map(p => p.trim()).filter(Boolean);
+  const entries: { model: string; quantity: number }[] = [];
+
+  for (const part of parts) {
+    // 匹配 "型號 #125: 35張" 或 "#125: 35" 或 "#125-#135 x 30" 或 "35張"
+    const match = part.match(/(?:型號\s*)?([#\d\w\s\-~]+?)\s*[:：xX*]\s*(\d+)\s*張?/);
+    if (match) {
+      const model = match[1].trim();
+      const quantity = parseInt(match[2], 10);
+      if (model && !isNaN(quantity) && quantity > 0) {
+        entries.push({ model, quantity });
+      }
+    }
+  }
+
+  if (entries.length === 0 && totalFallback > 0) {
+    return [{ model: defaultModel, quantity: totalFallback }];
+  }
+
+  return entries;
+}
+
+/**
+ * 解析 Google Sheet 中的換型號調配文字
+ */
+export function parseExchangeNeedFromText(text: string): ExchangeNeed {
+  if (!text || typeof text !== 'string') {
+    return { hasNeed: false };
+  }
+
+  const clean = text.trim();
+  if (
+    clean.includes('尚未填報') ||
+    clean.includes('型號相符') ||
+    clean === '無' ||
+    clean === '-' ||
+    clean === ''
+  ) {
+    return { hasNeed: false };
+  }
+
+  const hasNeed = clean.includes('需換') || clean.includes('換型號') || clean.includes('🏷️');
+  if (!hasNeed) {
+    return { hasNeed: false };
+  }
+
+  const deskMatch = clean.match(/需換桌\s*(\d+)\s*張(?:\s*\(提供\s*([#\d\w\s\-~]+?)\s*欲換\s*([#\d\w\s\-~]+?)\))?/);
+  const chairMatch = clean.match(/需換椅\s*(\d+)\s*張(?:\s*\(提供\s*([#\d\w\s\-~]+?)\s*欲換\s*([#\d\w\s\-~]+?)\))?/);
+  const reasonMatch = clean.match(/\[原因:\s*(.+?)\]/);
+
+  const deskExchangeNeeded = Boolean(deskMatch);
+  const targetDeskQuantity = deskMatch ? parseInt(deskMatch[1], 10) : undefined;
+  const currentDeskModel = deskMatch && deskMatch[2] ? deskMatch[2].trim() : undefined;
+  const targetDeskModel = deskMatch && deskMatch[3] ? deskMatch[3].trim() : undefined;
+
+  const chairExchangeNeeded = Boolean(chairMatch);
+  const targetChairQuantity = chairMatch ? parseInt(chairMatch[1], 10) : undefined;
+  const currentChairModel = chairMatch && chairMatch[2] ? chairMatch[2].trim() : undefined;
+  const targetChairModel = chairMatch && chairMatch[3] ? chairMatch[3].trim() : undefined;
+
+  const reason = reasonMatch ? reasonMatch[1].trim() : '';
+
+  const items: ExchangeItem[] = [];
+  if (deskExchangeNeeded && targetDeskQuantity) {
+    items.push({
+      type: 'desk',
+      model: targetDeskModel || '#130',
+      quantity: targetDeskQuantity,
+      currentModel: currentDeskModel
+    });
+  }
+  if (chairExchangeNeeded && targetChairQuantity) {
+    items.push({
+      type: 'chair',
+      model: targetChairModel || '#125-#135',
+      quantity: targetChairQuantity,
+      currentModel: currentChairModel
+    });
+  }
+
+  return {
+    hasNeed: true,
+    deskExchangeNeeded,
+    targetDeskModel,
+    targetDeskQuantity,
+    chairExchangeNeeded,
+    targetChairModel,
+    targetChairQuantity,
+    reason,
+    items
+  };
+}
+
+/**
  * 將從 Google Apps Script 雲端資料庫抓取的資料進行解析並整併至現有班級清單
  */
 export function mergeCloudClassrooms(
@@ -258,9 +376,36 @@ export function mergeCloudClassrooms(
     ? cloudData
     : [];
 
-  const incomingLogs: TransferLog[] | undefined = Array.isArray(cloudData.transferLogs)
+  let incomingLogs: TransferLog[] | undefined = Array.isArray(cloudData.transferLogs)
     ? cloudData.transferLogs
     : undefined;
+
+  // 支援從 transferLogsData 表格陣列解析派工清單
+  if (!incomingLogs && Array.isArray(cloudData.transferLogsData) && cloudData.transferLogsData.length > 1) {
+    const parsedLogs: TransferLog[] = [];
+    const logRows: any[][] = cloudData.transferLogsData;
+    for (let i = 1; i < logRows.length; i++) {
+      const r = logRows[i];
+      if (r && r[0]) {
+        parsedLogs.push({
+          id: String(r[0]),
+          timestamp: String(r[1] || new Date().toLocaleString('zh-TW')),
+          fromClassId: String(r[2] || '').split(' ')[0],
+          fromClassName: String(r[2] || ''),
+          toClassId: String(r[3] || '').split(' ')[0],
+          toClassName: String(r[3] || ''),
+          type: String(r[4] || '').includes('椅') ? 'chair' : 'desk',
+          model: String(r[5] || '#125-#135'),
+          quantity: parseInt(r[6], 10) || 1,
+          status: String(r[7] || '').includes('完成') ? 'completed' : 'pending',
+          note: String(r[8] || '')
+        });
+      }
+    }
+    if (parsedLogs.length > 0) {
+      incomingLogs = parsedLogs;
+    }
+  }
 
   if (incomingClassrooms.length > 0) {
     let updatedCount = 0;
@@ -277,10 +422,10 @@ export function mergeCloudClassrooms(
           ...local,
           ...cloud,
           // 保留未填報狀態的乾淨預設值
-          studentCount: typeof cloud.studentCount === 'number' ? cloud.studentCount : local.studentCount,
-          deskEntries: Array.isArray(cloud.deskEntries) ? cloud.deskEntries : local.deskEntries,
-          chairEntries: Array.isArray(cloud.chairEntries) ? cloud.chairEntries : local.chairEntries,
-          exchangeNeed: cloud.exchangeNeed || local.exchangeNeed,
+          studentCount: typeof cloud.studentCount === 'number' ? cloud.studentCount : 0,
+          deskEntries: Array.isArray(cloud.deskEntries) ? cloud.deskEntries : [],
+          chairEntries: Array.isArray(cloud.chairEntries) ? cloud.chairEntries : [],
+          exchangeNeed: cloud.exchangeNeed || { hasNeed: false },
           reported: Boolean(cloud.reported),
           isCompleted: Boolean(cloud.isCompleted)
         };
@@ -312,9 +457,32 @@ export function mergeCloudClassrooms(
       const row = rowMap.get(String(local.id).trim());
       if (row) {
         updatedCount++;
-        const studentCount = parseInt(row[5], 10) || local.studentCount;
-        const reportedStr = String(row[6] || '');
-        const isReported = reportedStr.includes('已填報') || studentCount > 0;
+        
+        // 1. 學生人數精確解析 (0 人必須被尊重，不可用 || 回退至舊資料)
+        const studentCountRaw = row[5];
+        let studentCount = 0;
+        if (studentCountRaw !== undefined && studentCountRaw !== null && studentCountRaw !== '') {
+          const parsedCount = parseInt(String(studentCountRaw).trim(), 10);
+          studentCount = !isNaN(parsedCount) ? Math.max(0, parsedCount) : 0;
+        }
+
+        // 2. 填報狀態解析
+        const reportedStr = String(row[6] || '').trim();
+        const totalDesks = parseInt(row[8], 10) || 0;
+        const totalChairs = parseInt(row[11], 10) || 0;
+        const deskListText = String(row[10] || '');
+        const chairListText = String(row[13] || '');
+
+        // 3. 解析桌椅各型號清單與數量
+        const deskEntries = parseModelEntries(deskListText, totalDesks, '#125-#135');
+        const chairEntries = parseModelEntries(chairListText, totalChairs, '#125-#135');
+
+        // 4. 判斷是否為已填報
+        const isReported = reportedStr.includes('已填報') || 
+          (reportedStr !== '待填報' && reportedStr !== '未填報' && (deskEntries.length > 0 || chairEntries.length > 0 || studentCount > 0));
+
+        // 5. 換型號需求與其他備註
+        const exchangeNeed = parseExchangeNeedFromText(String(row[16] || ''));
         const isCompleted = String(row[18] || '').includes('已完成');
         const note = String(row[19] || '');
         const lastUpdated = String(row[20] || '');
@@ -324,8 +492,11 @@ export function mergeCloudClassrooms(
           studentCount,
           reported: isReported,
           isCompleted,
-          note: note || local.note,
-          lastUpdated: lastUpdated || local.lastUpdated
+          deskEntries: isReported ? deskEntries : [],
+          chairEntries: isReported ? chairEntries : [],
+          exchangeNeed,
+          note: note || (isReported ? local.note : ''),
+          lastUpdated: lastUpdated || (isReported ? local.lastUpdated : '')
         };
       }
       return local;
