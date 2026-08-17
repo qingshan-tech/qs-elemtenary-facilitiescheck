@@ -109,7 +109,7 @@ export const FloorFilter: React.FC<Props> = ({
               </span>
             ) : (
               <span className="px-2 py-0.5 bg-emerald-100 text-emerald-800 font-medium rounded-md whitespace-nowrap">
-                桌子無缺口
+                桌子無缺
               </span>
             )}
 
@@ -126,7 +126,7 @@ export const FloorFilter: React.FC<Props> = ({
               </span>
             ) : (
               <span className="px-2 py-0.5 bg-emerald-100 text-emerald-800 font-medium rounded-md whitespace-nowrap">
-                椅子無缺口
+                椅子無缺
               </span>
             )}
 
